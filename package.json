@@ -1,0 +1,32 @@
+{
+    "version": "1.0.0",
+    "name": "mentator-ddl-creator",
+    "module": "src/index.ts",
+    "type": "module",
+    "private": true,
+    "devDependencies": {
+        "@types/bun": "latest",
+        "@types/mssql": "^9.1.8",
+        "@types/oracledb": "^6.10.0",
+        "tsc-esm-fix": "^3.1.2",
+        "typescript": "^5.9.3"
+    },
+    "scripts": {
+        "debug": "bun run debug/index.ts",
+        "prebuild": "node .auto/prebuild.js",
+        "build:linux": "npm run prebuild && bun build src/index.ts --compile --target=bun-linux-x64 --outfile dist/mentator-ddl-creator && chmod +x dist/mentator-ddl-creator",
+        "build:win": "npm run prebuild && bun build src/index.ts --compile --target=bun-windows-x64 --outfile dist/mentator-ddl-creator.exe",
+        "buildjs": "npm run prebuild && node_modules/.bin/tsc --outDir distjs && tsc-esm-fix distjs"
+    },
+    "dependencies": {
+        "@sinclair/typebox": "^0.34.41",
+        "@types/minimist": "^1.2.5",
+        "comment-json": "^4.4.1",
+        "jsonc-parser": "^3.3.1",
+        "minimist": "^1.2.8",
+        "mssql": "^12.1.1",
+        "oracledb": "^6.10.0",
+        "sql-formatter": "^15.6.10",
+        "vv-config-jsonc": "^1.0.5"
+    }
+}
