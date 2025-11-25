@@ -1,7 +1,7 @@
 import * as crypto from 'crypto'
 
 const ALGORITHM = 'aes-256-cbc'
-const KEY = crypto.createHash('sha256').update('mentator-ddl-creator-CRYPT-KEY!').digest()
+const KEY = crypto.createHash('sha256').update('mentator--CRYPT-KEY!').digest()
 const IV = Buffer.alloc(16, 0)
 
 function crypt(text: string): string {
