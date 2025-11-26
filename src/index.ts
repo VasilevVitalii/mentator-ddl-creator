@@ -24,7 +24,7 @@ if (args['conf-use']) {
 } else if (args['conf-gen-ora']) {
 	const confGenParam = args['conf-gen-ora']
 	if (typeof confGenParam !== 'string' || confGenParam.trim().length === 0) {
-		console.error('ERROR: Please provide a directory path to generate the config template. Example: --conf-gen /path/to/dir')
+		console.error('ERROR: Please provide a directory path to generate the config template. Example: --conf-gen-ora /path/to/dir')
 	} else {
 		const res = ConfigGerenate(resolve(confGenParam), EDdlKind.ORA)
 		if (res.error) {
@@ -36,7 +36,7 @@ if (args['conf-use']) {
 } else if (args['conf-gen-mssql']) {
 	const confGenParam = args['conf-gen-mssql']
 	if (typeof confGenParam !== 'string' || confGenParam.trim().length === 0) {
-		console.error('ERROR: Please provide a directory path to generate the config template. Example: --conf-gen /path/to/dir')
+		console.error('ERROR: Please provide a directory path to generate the config template. Example: --conf-gen-mssql /path/to/dir')
 	} else {
 		const res = ConfigGerenate(resolve(confGenParam), EDdlKind.MSSQL)
 		if (res.error) {
