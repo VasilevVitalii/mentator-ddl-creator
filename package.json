@@ -14,8 +14,8 @@
     "scripts": {
         "debug": "bun run debug/index.ts",
         "prebuild": "node .auto/prebuild.js",
-        "build:linux": "npm run prebuild && bun build src/index.ts --compile --target=bun-linux-x64 --outfile dist/mentator-ddl-creator && chmod +x dist/mentator-ddl-creator",
-        "build:win": "npm run prebuild && bun build src/index.ts --compile --target=bun-windows-x64 --outfile dist/mentator-ddl-creator.exe",
+        "build:linux": "npm run prebuild && bun build src/index.ts --compile --target=bun-linux-x64 --outfile dist/mentator-code-creator && chmod +x dist/mentator-code-creator",
+        "build:win": "npm run prebuild && bun build src/index.ts --compile --target=bun-windows-x64 --outfile dist/mentator-code-creator.exe",
         "buildjs": "npm run prebuild && node_modules/.bin/tsc --outDir distjs && tsc-esm-fix distjs"
     },
     "dependencies": {
