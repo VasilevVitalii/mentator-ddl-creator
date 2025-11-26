@@ -318,7 +318,7 @@ export const SConfig = Type.Object({
 export type TConfig = Static<typeof SConfig>
 
 export function ConfigGerenate(fullPath: string, kind: EDdlKind): { error?: string; success?: string } {
-	const fullFileName = join(fullPath, `mentator-code-loader.config.TEMPLATE.${kind}.jsonc`)
+	const fullFileName = join(fullPath, `mentator-ddl-creator.config.TEMPLATE.${kind}.jsonc`)
 	try {
 		const conf = new vvConfigJsonc(SConfig).getDefault([{ path: 'db.kind', value: kind }])
 		const resWrite = fsWriteFileSync(fullFileName, conf.text)
