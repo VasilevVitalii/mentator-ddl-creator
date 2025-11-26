@@ -1,6 +1,6 @@
 {
     "version": "1.0.2",
-    "name": "mentator-ddl-creator",
+    "name": "mentator-code-creator",
     "module": "src/index.ts",
     "type": "module",
     "private": true,
