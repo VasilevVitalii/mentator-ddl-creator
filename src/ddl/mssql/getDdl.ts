@@ -5,6 +5,10 @@ import type { TConfigMssql } from '../../config'
 
 export async function getDdl(server: DbMssql, schema: string, object: TObjectMssql, config: TConfigMssql): Promise<TResult<string>> {
 	switch (object.kind) {
+		case 'DATABASE':
+			return await getDdlDatabase(server, config.connection.database)
+		case 'SCHEMA':
+			return await getDdlSchema(server, schema)
 		case 'TABLE':
 			return await getDdlTable(server, schema, object.name, config)
 		case 'VIEW':
@@ -24,6 +28,69 @@ export async function getDdl(server: DbMssql, schema: string, object: TObjectMss
 		default:
 			return { error: `unsupported object type: ${object.kind}`, ok: false }
 	}
+}
+
+async function getDdlDatabase(server: DbMssql, databaseName: string): Promise<TResult<string>> {
+	const scriptDbInfo = [
+		`SELECT`,
+		`    d.name AS DB_NAME,`,
+		`    CAST(ISNULL(p.value, '') AS NVARCHAR(MAX)) AS DESCRIPTION`,
+		`FROM sys.databases d`,
+		`LEFT JOIN sys.extended_properties p ON p.major_id = d.database_id AND p.minor_id = 0 AND p.class = 0 AND p.name = 'MS_Description'`,
+		`WHERE d.name = '${databaseName}'`,
+	].join('\n')
+
+	const resDbInfo = await server.exec<{ DB_NAME: string; DESCRIPTION: string }[]>(scriptDbInfo)
+	if (!resDbInfo.ok) {
+		return { error: resDbInfo.error, ok: false }
+	}
+
+	if (resDbInfo.result.length === 0) {
+		return { error: `database not found: ${databaseName}`, ok: false }
+	}
+
+	const dbInfo = resDbInfo.result[0]!
+	let ddl = `CREATE DATABASE [${dbInfo.DB_NAME}]`
+
+	if (dbInfo.DESCRIPTION) {
+		ddl += `\nGO\n\nEXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'${dbInfo.DESCRIPTION.replace(/'/g, "''")}', @level0type=N'DATABASE', @level0name=N'${dbInfo.DB_NAME}'`
+	}
+
+	return { result: ddl, ok: true }
+}
+
+async function getDdlSchema(server: DbMssql, schemaName: string): Promise<TResult<string>> {
+	const scriptSchemaInfo = [
+		`SELECT`,
+		`    s.name AS SCHEMA_NAME,`,
+		`    USER_NAME(s.principal_id) AS OWNER_NAME,`,
+		`    CAST(ISNULL(p.value, '') AS NVARCHAR(MAX)) AS DESCRIPTION`,
+		`FROM sys.schemas s`,
+		`LEFT JOIN sys.extended_properties p ON p.major_id = s.schema_id AND p.minor_id = 0 AND p.class = 3 AND p.name = 'MS_Description'`,
+		`WHERE s.name = '${schemaName}'`,
+	].join('\n')
+
+	const resSchemaInfo = await server.exec<{ SCHEMA_NAME: string; OWNER_NAME: string; DESCRIPTION: string }[]>(scriptSchemaInfo)
+	if (!resSchemaInfo.ok) {
+		return { error: resSchemaInfo.error, ok: false }
+	}
+
+	if (resSchemaInfo.result.length === 0) {
+		return { error: `schema not found: ${schemaName}`, ok: false }
+	}
+
+	const schemaInfo = resSchemaInfo.result[0]!
+	let ddl = `CREATE SCHEMA [${schemaInfo.SCHEMA_NAME}]`
+
+	if (schemaInfo.OWNER_NAME && schemaInfo.OWNER_NAME !== 'dbo') {
+		ddl += ` AUTHORIZATION [${schemaInfo.OWNER_NAME}]`
+	}
+
+	if (schemaInfo.DESCRIPTION) {
+		ddl += `\nGO\n\nEXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'${schemaInfo.DESCRIPTION.replace(/'/g, "''")}', @level0type=N'SCHEMA', @level0name=N'${schemaInfo.SCHEMA_NAME}'`
+	}
+
+	return { result: ddl, ok: true }
 }
 
 async function getDdlTable(server: DbMssql, schema: string, tableName: string, config: TConfigMssql): Promise<TResult<string>> {

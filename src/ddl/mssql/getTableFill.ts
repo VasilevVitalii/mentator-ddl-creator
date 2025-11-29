@@ -3,6 +3,25 @@ import type { TResult } from '../../tresult'
 import type { TTableFill } from './getSchemaList'
 
 export async function getTableFill(server: DbMssql, schema: string, table: TTableFill): Promise<TResult<string>> {
+	const scriptColumns = [
+		`SELECT c.name AS COLUMN_NAME, t.name AS DATA_TYPE`,
+		`FROM sys.columns c`,
+		`JOIN sys.types t ON c.user_type_id = t.user_type_id`,
+		`JOIN sys.tables tb ON c.object_id = tb.object_id`,
+		`JOIN sys.schemas s ON tb.schema_id = s.schema_id`,
+		`WHERE s.name = '${schema}' AND tb.name = '${table.name}'`,
+		`ORDER BY c.column_id`,
+	].join('\n')
+
+	const resColumns = await server.exec<{ COLUMN_NAME: string; DATA_TYPE: string }[]>(scriptColumns)
+	if (!resColumns.ok) {
+		return { error: resColumns.error, ok: false }
+	}
+
+	const excludeColumns = resColumns.result
+		.filter(col => col.DATA_TYPE === 'timestamp' || col.DATA_TYPE === 'rowversion')
+		.map(col => col.COLUMN_NAME)
+
 	const orderBy = table.pklist.length > 0 ? (
 		table.fill === 'full'
 			? `ORDER BY ${table.pklist.join(',')}`
@@ -17,7 +36,7 @@ export async function getTableFill(server: DbMssql, schema: string, table: TTabl
 	if (res.result.length <= 0) {
 		return { result: '--NO DATA', ok: true }
 	}
-	const columnList = Object.keys(res.result[0])
+	const columnList = Object.keys(res.result[0]).filter(col => !excludeColumns.includes(col))
 	const insertParts = res.result.map(row => {
 		const values = columnList.map(column => {
 			const val = row[column]

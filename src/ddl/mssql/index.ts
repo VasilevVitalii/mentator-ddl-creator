@@ -34,6 +34,74 @@ export async function GoMssql(logger: Logger, config: TConfigMssql): Promise<voi
 	const dirList = dirListRes.result
 	const statList = getStat(resGetSchemaList.result, dirList)
 
+	if (config.objects.database.dir) {
+		const dbDir = config.objects.database.dir.replaceAll('{{base-name}}', config.connection.database)
+		const currentTextRes = await fsReadFile(dbDir)
+		if (!currentTextRes.ok) {
+			logger.error(`on read current file "${dbDir}"`, currentTextRes.error)
+		} else {
+			const actualTextRes = await getDdl(server, '', { kind: 'DATABASE', name: config.connection.database, state: 'unprocessed' }, config)
+			if (!actualTextRes.ok) {
+				logger.error(`on exec query in MSSQL "${config.connection.host}:${config.connection.port}/${config.connection.database}"`, actualTextRes.error)
+			} else {
+				const actualText = trim(actualTextRes.result)
+				if (!currentTextRes.result) {
+					const writeRes = await fsWriteFile(dbDir, actualText)
+					if (writeRes.error) {
+						logger.error(`on write file "${dbDir}"`, writeRes.error)
+					} else {
+						logger.debug(`create database script file "${dbDir}"`)
+					}
+				} else if (actualText !== trim(currentTextRes.result)) {
+					const writeRes = await fsWriteFile(dbDir, actualText)
+					if (writeRes.error) {
+						logger.error(`on update file "${dbDir}"`, writeRes.error)
+					} else {
+						logger.debug(`update database script file "${dbDir}"`)
+					}
+				} else {
+					logger.debug(`no changes for database script file "${dbDir}"`)
+				}
+			}
+		}
+	}
+
+	if (config.objects.schema.dir) {
+		for (const schema of resGetSchemaList.result) {
+			const schemaDir = config.objects.schema.dir
+				.replaceAll('{{base-name}}', config.connection.database)
+				.replaceAll('{{schema-name}}', schema.name)
+			const currentTextRes = await fsReadFile(schemaDir)
+			if (!currentTextRes.ok) {
+				logger.error(`on read current file "${schemaDir}"`, currentTextRes.error)
+			} else {
+				const actualTextRes = await getDdl(server, schema.name, { kind: 'SCHEMA', name: schema.name, state: 'unprocessed' }, config)
+				if (!actualTextRes.ok) {
+					logger.error(`on exec query in MSSQL "${config.connection.host}:${config.connection.port}/${config.connection.database}"`, actualTextRes.error)
+				} else {
+					const actualText = trim(actualTextRes.result)
+					if (!currentTextRes.result) {
+						const writeRes = await fsWriteFile(schemaDir, actualText)
+						if (writeRes.error) {
+							logger.error(`on write file "${schemaDir}"`, writeRes.error)
+						} else {
+							logger.debug(`create schema script file "${schemaDir}"`)
+						}
+					} else if (actualText !== trim(currentTextRes.result)) {
+						const writeRes = await fsWriteFile(schemaDir, actualText)
+						if (writeRes.error) {
+							logger.error(`on update file "${schemaDir}"`, writeRes.error)
+						} else {
+							logger.debug(`update schema script file "${schemaDir}"`)
+						}
+					} else {
+						logger.debug(`no changes for schema script file "${schemaDir}"`)
+					}
+				}
+			}
+		}
+	}
+
 	statList.forEach(stat => {
 		const text = `find schema "${stat.schema}"${stat.objectList.length > 0 ? `` : ` (empty)`}`
 		const additional = [] as string[]
@@ -75,7 +143,7 @@ export async function GoMssql(logger: Logger, config: TConfigMssql): Promise<voi
 			if (object.state === 'ignore') continue
 			currentObjectIdx++
 			const percent = `${((currentObjectIdx / totalObjectCount) * 100).toFixed(1)}%`.padStart(5, '0')
-			const dirRes = getDir(object, schema, dirList)
+			const dirRes = getDir(object, schema, dirList, config.connection.database)
 			if (!dirRes.ok) {
 				logger.error(dirRes.error)
 				object.state = 'error'
@@ -111,6 +179,7 @@ export async function GoMssql(logger: Logger, config: TConfigMssql): Promise<voi
 				}
 				actualText = trim(`${actualText}\n\n${trim(descTextRes.result)}`)
 			}
+			actualText = `USE [${config.connection.database}]\nGO\n\n${actualText}`
 
 			if (!currentTextRes.result) {
 				const writeRes = await fsWriteFile(dir, actualText)
@@ -145,6 +214,7 @@ export async function GoMssql(logger: Logger, config: TConfigMssql): Promise<voi
 				{ kind: object.fill === 'full' ? 'TABLE_FILL_FULL' : 'TABLE_FILL_DEMO', name: object.name, state: 'unprocessed' },
 				schema,
 				dirList,
+				config.connection.database,
 			)
 			if (!dirRes.ok) {
 				logger.error(dirRes.error)
@@ -170,6 +240,7 @@ export async function GoMssql(logger: Logger, config: TConfigMssql): Promise<voi
 				continue
 			}
 			let actualText = trim(actualTextRes.result)
+			actualText = `USE [${config.connection.database}]\nGO\n\n${actualText}`
 			if (!currentTextRes.result) {
 				const writeRes = await fsWriteFile(dir, actualText)
 				if (writeRes.error) {

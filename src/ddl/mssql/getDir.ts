@@ -1,10 +1,11 @@
 import type { TResult } from '../../tresult'
 import type { TLinkMssql, TObjectMssql, TSchemaMssql } from './getSchemaList'
 
-export function getDir(object: TObjectMssql, schema: TSchemaMssql, dirList: Record<string, string | undefined>): TResult<string> {
+export function getDir(object: TObjectMssql, schema: TSchemaMssql, dirList: Record<string, string | undefined>, baseName: string): TResult<string> {
 	let dir = dirList[object.kind]
 	if (!dir) return { error: 'empty dir', ok: false }
 
+	dir = dir.replaceAll(`{{base-name}}`, baseName)
 	dir = dir.replaceAll(`{{schema-name}}`, schema.name)
 	dir = dir.replaceAll(`{{object-name}}`, object.name)
 

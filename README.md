@@ -78,6 +78,80 @@ mentator-ddl-creator --conf-use ./vv-ddl-get.config.TEMPLATE.MSSQL.jsonc
     * The "log" subdirectory contains the utility's log output
     * The "ddl" subdirectory contains the generated scripts
 
+## Supported Database Objects
+
+### Microsoft SQL Server (MSSQL)
+
+The utility extracts the following database objects for MSSQL:
+
+* **DATABASE** - Database creation script with description (if available)
+* **SCHEMA** - Schema creation script including:
+  - Schema owner (AUTHORIZATION)
+  - Schema description (extended properties)
+* **TABLE** - Table structure including:
+  - Column definitions with data types
+  - Primary key constraints
+  - Unique constraints
+  - Foreign key constraints with references
+  - Default values
+  - IDENTITY columns
+  - FILEGROUP placement (if enabled in config)
+  - Table and column descriptions (extended properties)
+* **VIEW** - View definitions
+* **INDEX** - Index definitions including:
+  - Clustered and non-clustered indexes
+  - Unique indexes
+  - Index columns with sort order (ASC/DESC)
+  - FILEGROUP placement (if enabled in config)
+* **TRIGGER** - Trigger definitions
+* **PROCEDURE** - Stored procedure definitions
+* **FUNCTION** - User-defined function definitions (scalar, inline table-valued, multi-statement table-valued)
+* **SEQUENCE** - Sequence definitions with all properties (start value, increment, min/max values, cycle option)
+* **SYNONYM** - Synonym definitions
+* **TABLE_FILL_FULL** - Full data export scripts (INSERT statements) for specified tables
+  - TIMESTAMP/ROWVERSION columns are automatically excluded
+* **TABLE_FILL_DEMO** - Partial data export scripts (configurable number of rows)
+  - TIMESTAMP/ROWVERSION columns are automatically excluded
+
+All generated scripts automatically include `USE [database_name] GO` at the beginning.
+
+### Oracle Database
+
+The utility extracts the following database objects for Oracle:
+
+* **TABLE** - Table structure including:
+  - Column definitions with data types
+  - Primary key constraints
+  - Unique constraints
+  - Foreign key constraints with references
+  - Check constraints
+  - Default values
+  - STORAGE parameters (if enabled in config)
+  - TABLESPACE placement (if enabled in config)
+  - Table and column comments
+* **VIEW** - View definitions
+* **MATERIALIZED VIEW (MVIEW)** - Materialized view definitions with:
+  - Query definition
+  - Refresh options
+  - STORAGE parameters (if enabled in config)
+* **INDEX** - Index definitions including:
+  - B-tree, bitmap, function-based indexes
+  - Unique and non-unique indexes
+  - Index columns with sort order
+  - TABLESPACE and STORAGE parameters (if enabled in config)
+* **TRIGGER** - Trigger definitions (table and view triggers)
+* **PACKAGE** - Package specifications (headers)
+* **PACKAGE_BODY** - Package bodies (implementations)
+* **PROCEDURE** - Standalone procedure definitions
+* **FUNCTION** - Standalone function definitions
+* **TYPE** - Object type specifications
+* **TYPE_BODY** - Object type bodies (implementations)
+* **SEQUENCE** - Sequence definitions with all properties
+* **SYNONYM** - Synonym definitions (public and private)
+* **JOB** - DBMS_SCHEDULER job definitions
+* **TABLE_FILL_FULL** - Full data export scripts (INSERT statements) for specified tables
+* **TABLE_FILL_DEMO** - Partial data export scripts (configurable number of rows)
+
 ## Important Notes
 
 1. #### Disabling generation via dir = null
