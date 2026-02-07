@@ -106,7 +106,7 @@ export async function GoMssql(logger: Logger, config: TConfigMssql): Promise<voi
 		const text = `find schema "${stat.schema}"${stat.objectList.length > 0 ? `` : ` (empty)`}`
 		const additional = [] as string[]
 		stat.objectList.forEach(itemStat => {
-			additional.push(`${itemStat.kind.padEnd(16, ' ')} ${itemStat.count.toString().padStart(6, '0')}${itemStat.isIgnore ? ` (ignored)` : ``}`)
+			additional.push(`${itemStat.kind.padEnd(16, '.')} ${itemStat.count.toString().padStart(6, '0')}${itemStat.isIgnore ? ` (ignored)` : ``}`)
 			if (itemStat.isIgnore) {
 				resGetSchemaList.result
 					.find(f => f.name === stat.schema)
@@ -118,13 +118,13 @@ export async function GoMssql(logger: Logger, config: TConfigMssql): Promise<voi
 		if (config.objects.table_fill_full.dir) {
 			const countFullFill = resGetSchemaList.result.find(f => f.name === stat.schema)?.tableFillList?.filter(ff => ff.fill === 'full')?.length || 0
 			if (countFullFill > 0) {
-				additional.push(`${'TABLE FILL FULL'.padEnd(16, ' ')} ${countFullFill.toString().padStart(6, '0')}`)
+				additional.push(`${'TABLE FILL FULL'.padEnd(16, '.')} ${countFullFill.toString().padStart(6, '0')}`)
 			}
 		}
 		if (config.objects.table_fill_demo.dir) {
 			const countFullDemo = resGetSchemaList.result.find(f => f.name === stat.schema)?.tableFillList?.filter(ff => ff.fill === 'demo')?.length || 0
 			if (countFullDemo > 0) {
-				additional.push(`${'TABLE FILL DEMO'.padEnd(16, ' ')} ${countFullDemo.toString().padStart(6, '0')}`)
+				additional.push(`${'TABLE FILL DEMO'.padEnd(16, '.')} ${countFullDemo.toString().padStart(6, '0')}`)
 			}
 		}
 		logger.debug(text, additional.length > 0 ? additional.join('\n') : undefined)
@@ -228,19 +228,19 @@ export async function GoMssql(logger: Logger, config: TConfigMssql): Promise<voi
 				object.state = 'error'
 				continue
 			}
-			if (currentTextRes.result && config.objects.table_fill_demo.ignore_exists) {
-				logger.debug(`[${percent}] exists file with script "${dir}"`)
-				object.state = 'nochange'
-				continue
-			}
-			const actualTextRes = await getTableFill(server, schema.name, object)
+			const format = object.fill === 'full' ? config.objects.table_fill_full.format : config.objects.table_fill_demo.format
+			const mockConfig = object.fill === 'demo' ? config.objects.table_fill_demo.mock : undefined
+			const actualTextRes = await getTableFill(server, schema.name, object, config.connection.database, format, mockConfig)
 			if (!actualTextRes.ok) {
 				logger.error(`on exec query in MSSQL "${config.connection.host}:${config.connection.port}/${config.connection.database}"`, actualTextRes.error)
 				object.state = 'error'
 				continue
 			}
 			let actualText = trim(actualTextRes.result)
-			actualText = `USE [${config.connection.database}]\nGO\n\n${actualText}`
+			// Add USE [database] GO only for SQL format
+			if (format === 'SQL') {
+				actualText = `USE [${config.connection.database}]\nGO\n\n${actualText}`
+			}
 			if (!currentTextRes.result) {
 				const writeRes = await fsWriteFile(dir, actualText)
 				if (writeRes.error) {

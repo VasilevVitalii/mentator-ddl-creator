@@ -1,8 +1,18 @@
 import type { DbMssql } from '../../db/mssql'
 import type { TResult } from '../../tresult'
 import type { TTableFill } from './getSchemaList'
+import { EFormatTableFill, type TConfigMssql } from '../../config'
+import { matchPattern } from '../../util/matchPattern'
+import { mockValue } from '../../util/mockValue'
 
-export async function getTableFill(server: DbMssql, schema: string, table: TTableFill): Promise<TResult<string>> {
+export async function getTableFill(
+	server: DbMssql,
+	schema: string,
+	table: TTableFill,
+	database: string,
+	format: EFormatTableFill = EFormatTableFill.SQL,
+	mockConfig?: TConfigMssql['objects']['table_fill_demo']['mock'],
+): Promise<TResult<string>> {
 	const scriptColumns = [
 		`SELECT c.name AS COLUMN_NAME, t.name AS DATA_TYPE`,
 		`FROM sys.columns c`,
@@ -34,9 +44,64 @@ export async function getTableFill(server: DbMssql, schema: string, table: TTabl
 		return { error: res.error, ok: false }
 	}
 	if (res.result.length <= 0) {
-		return { result: '--NO DATA', ok: true }
+		return { result: format === EFormatTableFill.JSON ? '{"row":[]}' : '--NO DATA', ok: true }
 	}
 	const columnList = Object.keys(res.result[0]).filter(col => !excludeColumns.includes(col))
+
+	// Apply mocking if configured
+	if (mockConfig && mockConfig.length > 0) {
+		// Determine which fields need to be mocked
+		const fieldsToMock = new Set<string>()
+		for (const mockRule of mockConfig) {
+			const schemaMatch = matchPattern(schema, mockRule.schema)
+			const tableMatch = matchPattern(table.name, mockRule.table)
+			if (schemaMatch && tableMatch) {
+				// Check each column against the field pattern
+				columnList.forEach(column => {
+					if (matchPattern(column, mockRule.field)) {
+						fieldsToMock.add(column)
+					}
+				})
+			}
+		}
+
+		// Apply mocking to the fields
+		if (fieldsToMock.size > 0) {
+			res.result = res.result.map(row => {
+				const mockedRow = { ...row }
+				fieldsToMock.forEach(field => {
+					mockedRow[field] = mockValue(row[field])
+				})
+				return mockedRow
+			})
+		}
+	}
+
+	// Generate JSON format
+	if (format === EFormatTableFill.JSON) {
+		const jsonData = {
+			schema_name: schema,
+			object_name: table.name,
+			database_name: database,
+			row: res.result.map(row => {
+				const jsonRow: Record<string, any> = {}
+				columnList.forEach(column => {
+					const val = row[column]
+					if (val === null || val === undefined) {
+						jsonRow[column] = null
+					} else if (val instanceof Date) {
+						jsonRow[column] = val.toISOString()
+					} else {
+						jsonRow[column] = val
+					}
+				})
+				return jsonRow
+			})
+		}
+		return { result: JSON.stringify(jsonData, null, 2), ok: true }
+	}
+
+	// Generate SQL format
 	const insertParts = res.result.map(row => {
 		const values = columnList.map(column => {
 			const val = row[column]

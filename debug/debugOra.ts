@@ -73,12 +73,16 @@ export function DebugOra() {
 				},
 				table_fill_full: {
 					dir: './debug/ddl/{{schema-name}}/TABLEFILLFULL/{{schema-name}}.TBL.{{object-name}}.FILLFULL.sql',
-					list: ['HR.EMPLOYEES'],
+					list: [
+						{
+							schema: 'HR',
+							table: 'EMPLOYEES'
+						}
+					],
 				},
 				table_fill_demo: {
 					dir: './debug/ddl/{{schema-name}}/TABLEFILLDEMO/{{schema-name}}.TBL.{{object-name}}.FILLDEMO.sql',
 					count: 3,
-					ignore_exists: false,
 				},
 			},
 		},

@@ -1,6 +1,7 @@
-import { EUseMode, type TConfigOra } from '../../config'
+import { EFilterTableFill, EUseMode, type TConfigOra } from '../../config'
 import { DbOra } from '../../db/ora'
 import type { TResult } from '../../tresult'
+import { matchPattern } from '../../util/matchPattern'
 
 export type TObjectOra = {
 	kind: string
@@ -110,20 +111,7 @@ export async function getSchemaList(server: DbOra, config: TConfigOra): Promise<
 	}
 
 	if (config.objects.table_fill_full.dir || (config.objects.table_fill_demo.dir && config.objects.table_fill_demo.count)) {
-		const tableFillFullList = [] as {schema: string, name: string}[]
-		if (config.objects.table_fill_full.dir) {
-			const duplicates = Array.from(new Set(config.objects.table_fill_full.list.filter((item, index, self) => self.indexOf(item) !== index)))
-			if (duplicates.length > 0) {
-				return { error: `in config in "table_fill_full.list" non uniq table(s): "${duplicates.join('","')}"`, ok: false }
-			}
-			for (const tableFillFull of config.objects.table_fill_full.list) {
-				const t = tableFillFull.split('.')
-				if (t.length !== 2) {
-					return { error: `in config in "table_fill_full.list" bad name in table "${tableFillFull}"`, ok: false }
-				}
-				tableFillFullList.push({schema: t[0]!, name: t[1]!})
-			}
-		}
+		const tableFillFullList = config.objects.table_fill_full.list || []
 		const scriptFindPk = [
 			`SELECT cons.OWNER, cons.TABLE_NAME, cols.COLUMN_NAME`,
 			`FROM all_constraints cons`,
@@ -142,14 +130,44 @@ export async function getSchemaList(server: DbOra, config: TConfigOra): Promise<
 			if (fndTable) {
 				fndTable.pklist.push(pk.COLUMN_NAME)
 			} else {
+				// Check if table matches any pattern in table_fill_full list
+				const isFull = tableFillFullList.some(pattern => {
+					const schemaMatch = matchPattern(fndSchema.name, pattern.schema)
+					const tableMatch = matchPattern(pk.TABLE_NAME, pattern.table)
+					return schemaMatch && tableMatch
+				})
+
 				const newTable: TTableFill = {
 					name: pk.TABLE_NAME,
-					fill: tableFillFullList.some(f => f.schema === fndSchema.name && f.name === pk.TABLE_NAME) ? 'full' : 'demo',
+					fill: isFull ? 'full' : 'demo',
 					count: config.objects.table_fill_demo.count || 3,
 					state: 'unprocessed',
 					pklist: [pk.COLUMN_NAME]
 				}
 				fndSchema.tableFillList.push(newTable)
+			}
+		}
+
+		// Apply filter for demo tables if configured
+		if (config.objects.table_fill_demo.filter?.list && config.objects.table_fill_demo.filter.list.length > 0) {
+			const filterList = config.objects.table_fill_demo.filter.list
+			const filterMode = config.objects.table_fill_demo.filter.mode
+
+			for (const schema of schemaList) {
+				schema.tableFillList = schema.tableFillList.filter(table => {
+					// Skip full tables - filter only applies to demo tables
+					if (table.fill === 'full') return true
+
+					// Check if table matches any pattern in the filter list
+					const matchesAnyPattern = filterList.some(pattern => {
+						const schemaMatch = matchPattern(schema.name, pattern.schema)
+						const tableMatch = matchPattern(table.name, pattern.table)
+						return schemaMatch && tableMatch
+					})
+
+					// WHITELIST: keep only matching tables; BLACKLIST: keep only non-matching tables
+					return filterMode === EFilterTableFill.WHITELIST ? matchesAnyPattern : !matchesAnyPattern
+				})
 			}
 		}
 	}

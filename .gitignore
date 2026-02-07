@@ -16,10 +16,9 @@ logs
 _.log
 report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 debug/log
-debug/ddl
-debug/ddl-mssql
-debug/LOG
-debug/DDL
+debug/mssql*
+debug/ora*
+debug/pg*
 
 # dotenv environment variable files
 .env

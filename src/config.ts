@@ -19,6 +19,16 @@ export enum EUseMode {
 	EXCEPT = 'EXCEPT',
 }
 
+export enum EFilterTableFill {
+	WHITELIST = 'WHITELIST',
+	BLACKLIST = 'BLACKLIST',
+}
+
+export enum EFormatTableFill {
+	SQL = 'SQL',
+	JSON = 'JSON'
+}
+
 export const SConfigOra = Type.Object({
 	kind: Type.Literal(EDdlKind.ORA, { description: 'specifies that this configuration is for Oracle Database' }),
 	connection: SConnectionOra,
@@ -30,7 +40,7 @@ export const SConfigOra = Type.Object({
 				default: 'INCLUDE',
 			}),
 		}),
-		storage : Type.Object({
+		storage: Type.Object({
 			allowStorage: Type.Boolean({
 				description: 'for TABLE and MATERIALIZED VIEW: if true, include STORAGE parameters (INITIAL, NEXT, MINEXTENTS, etc.)',
 				default: false,
@@ -159,10 +169,28 @@ export const SConfigOra = Type.Object({
 					default: `path/to/ddl/${DefaultPathOra.table_fill_full.path}`,
 				}),
 			),
-			list: Type.Array(Type.String(), {
-				description: 'list of tables for which to generate full data insert scripts; example: ["schema1.table1", "schema2.table1"]',
-				default: ['schema1.table1', 'schema2.table1'],
-			}),
+			format: Type.Optional(Type.Enum(EFormatTableFill, {
+				description: 'format for save fill data: SQL - as sql script "insert", JSON - as json array',
+				default: 'SQL'
+			})),
+			list: Type.Optional(
+				Type.Array(
+					Type.Object({
+						schema: Type.String({
+							description: 'schema name, you can use char "*" as the first or last element of the pattern',
+							default: `MY_SCHEMA1`,
+						}),
+						table: Type.String({
+							description: 'table name, you can use char "*" as the first or last element of the pattern',
+							default: `myTable1`,
+						}),
+					}),
+					{
+						description: 'list of tables for which to generate full data insert scripts',
+						default: [],
+					},
+				),
+			),
 		}),
 		table_fill_demo: Type.Object({
 			dir: Type.Optional(
@@ -171,8 +199,57 @@ export const SConfigOra = Type.Object({
 					default: `path/to/ddl/${DefaultPathOra.table_fill_demo.path}`,
 				}),
 			),
+			format: Type.Optional(Type.Enum(EFormatTableFill, {
+				description: 'format for save fill data: SQL - as sql script "insert", JSON - as json array',
+				default: 'SQL'
+			})),
 			count: Type.Optional(Type.Integer({ description: 'number of records to include in the demo data script', default: 3, minimum: 0 })),
-			ignore_exists: Type.Optional(Type.Boolean({ description: 'if true, do not regenerate the script if the file already exists', default: false })),
+		filter: Type.Optional(
+			Type.Object(
+				{
+					mode: Type.Enum(EFilterTableFill, {
+						description: 'WHITELIST: only tables from list; BLACKLIST: all tables except from list',
+						default: 'WHITELIST',
+					}),
+					list: Type.Optional(
+						Type.Array(
+							Type.Object({
+								schema: Type.String({
+									description: 'schema name, you can use char "*" as the first or last element of the pattern',
+									default: `MY_SCHEMA1`,
+								}),
+								table: Type.String({
+									description: 'table name, you can use char "*" as the first or last element of the pattern',
+									default: `myTable1`,
+								}),
+							}),
+						),
+					),
+				},
+				{ description: 'list of tables whose data will be exported' },
+			),
+		),
+			mock: Type.Optional(
+				Type.Array(
+					Type.Object(
+						{
+							schema: Type.String({
+								description: 'schema name, you can use char "*" as the first or last element of the pattern',
+								default: `MY_SCHEMA1`,
+							}),
+							table: Type.String({
+								description: 'table name, you can use char "*" as the first or last element of the pattern',
+								default: `myTable1`,
+							}),
+							field: Type.String({
+								description: 'field name, you can use char "*" as the first or last element of the pattern',
+								default: `myField1`,
+							}),
+						},
+						{ description: 'list of table fields for which data needs to be masked' },
+					),
+				),
+			),
 		}),
 	}),
 })
@@ -299,10 +376,28 @@ export const SConfigMssql = Type.Object({
 					default: `path/to/ddl/${DefaultPathMssql.table_fill_full.path}`,
 				}),
 			),
-			list: Type.Array(Type.String(), {
-				description: 'list of tables for which to generate full data insert scripts; example: ["schema1.table1", "schema2.table1"]',
-				default: ['schema1.table1', 'schema2.table1'],
-			}),
+			format: Type.Optional(Type.Enum(EFormatTableFill, {
+				description: 'format for save fill data: SQL - as sql script "insert", JSON - as json array',
+				default: 'SQL'
+			})),
+			list: Type.Optional(
+				Type.Array(
+					Type.Object({
+						schema: Type.String({
+							description: 'schema name, you can use char "*" as the first or last element of the pattern',
+							default: `dbo`,
+						}),
+						table: Type.String({
+							description: 'table name, you can use char "*" as the first or last element of the pattern',
+							default: `myTable1`,
+						}),
+					}),
+					{
+						description: 'list of tables for which to generate full data insert scripts',
+						default: [],
+					},
+				),
+			),
 		}),
 		table_fill_demo: Type.Object({
 			dir: Type.Optional(
@@ -311,8 +406,57 @@ export const SConfigMssql = Type.Object({
 					default: `path/to/ddl/${DefaultPathMssql.table_fill_demo.path}`,
 				}),
 			),
+			format: Type.Optional(Type.Enum(EFormatTableFill, {
+				description: 'format for save fill data: SQL - as sql script "insert", JSON - as json array',
+				default: 'SQL'
+			})),
 			count: Type.Optional(Type.Integer({ description: 'number of records to include in the demo data script', default: 3, minimum: 0 })),
-			ignore_exists: Type.Optional(Type.Boolean({ description: 'if true, do not regenerate the script if the file already exists', default: false })),
+			filter: Type.Optional(
+				Type.Object(
+					{
+						mode: Type.Enum(EFilterTableFill, {
+							description: 'WHITELIST: only tables from list; BLACKLIST: all tables except from list',
+							default: 'WHITELIST',
+						}),
+						list: Type.Optional(
+							Type.Array(
+								Type.Object({
+									schema: Type.String({
+										description: 'schema name, you can use char "*" as the first or last element of the pattern',
+										default: `dbo`,
+									}),
+									table: Type.String({
+										description: 'table name, you can use char "*" as the first or last element of the pattern',
+										default: `myTable1`,
+									}),
+								}),
+							),
+						),
+					},
+					{ description: 'list of tables whose data will be exported' },
+				),
+			),
+			mock: Type.Optional(
+				Type.Array(
+					Type.Object(
+						{
+							schema: Type.String({
+								description: 'schema name, you can use char "*" as the first or last element of the pattern',
+								default: `dbo`,
+							}),
+							table: Type.String({
+								description: 'table name, you can use char "*" as the first or last element of the pattern',
+								default: `myTable1`,
+							}),
+							field: Type.String({
+								description: 'field name, you can use char "*" as the first or last element of the pattern',
+								default: `myField1`,
+							}),
+						},
+						{ description: 'list of table fields for which data needs to be masked' },
+					),
+				),
+			),
 		}),
 	}),
 })

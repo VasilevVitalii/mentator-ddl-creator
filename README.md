@@ -152,6 +152,88 @@ The utility extracts the following database objects for Oracle:
 * **TABLE_FILL_FULL** - Full data export scripts (INSERT statements) for specified tables
 * **TABLE_FILL_DEMO** - Partial data export scripts (configurable number of rows)
 
+## Table Data Export Configuration
+
+The utility provides flexible options for exporting table data through `table_fill_full` and `table_fill_demo` sections.
+
+### table_fill_full Configuration
+
+Full data export for specified tables.
+
+* **dir** - Directory path template for saving scripts (can use placeholders like `{{schema-name}}`, `{{object-name}}`, etc.)
+* **format** - Output format:
+  - `SQL` - Generates INSERT statements (default)
+  - `JSON` - Generates JSON format with metadata: `{schema_name, object_name, database_name, row: [...]}`
+* **list** - Array of table patterns to export fully. Each element is an object:
+  - `schema` - Schema name (supports `*` wildcards)
+  - `table` - Table name (supports `*` wildcards)
+
+Example:
+```jsonc
+"table_fill_full": {
+  "dir": "./data/full/{{schema-name}}.{{object-name}}.sql",
+  "format": "JSON",
+  "list": [
+    { "schema": "dbo", "table": "Config*" },      // All tables starting with Config
+    { "schema": "ref", "table": "*" }             // All tables in ref schema
+  ]
+}
+```
+
+### table_fill_demo Configuration
+
+Partial data export (top N rows) for demo/testing purposes.
+
+* **dir** - Directory path template for saving scripts
+* **format** - Output format (`SQL` or `JSON`)
+* **count** - Number of rows to export per table (default: 3)
+* **filter** - Optional filtering of which tables to export:
+  - `mode` - Filter mode:
+    - `WHITELIST` - Export only tables matching the list
+    - `BLACKLIST` - Export all tables except those matching the list
+  - `list` - Array of table patterns. Each element is an object:
+    - `schema` - Schema name (supports `*` wildcards)
+    - `table` - Table name (supports `*` wildcards)
+* **mock** - Optional data masking/anonymization. Array of field patterns to mask:
+  - `schema` - Schema name (supports `*` wildcards)
+  - `table` - Table name (supports `*` wildcards)
+  - `field` - Field name (supports `*` wildcards)
+
+Masking rules:
+  - Numbers: each digit replaced with a random digit
+  - Strings: letters replaced with random English letters (preserving case), digits replaced with random digits
+  - Dates: shifted by random -5 to +5 days
+  - Times: shifted by random -30 to +30 minutes
+  - NULL values: remain NULL
+  - Nested objects: rules applied recursively
+
+Example:
+```jsonc
+"table_fill_demo": {
+  "dir": "./data/demo/{{schema-name}}.{{object-name}}.sql",
+  "format": "SQL",
+  "count": 5,
+  "filter": {
+    "mode": "WHITELIST",
+    "list": [
+      { "schema": "dbo", "table": "User*" },      // All User tables
+      { "schema": "sales", "table": "*" }         // All sales tables
+    ]
+  },
+  "mock": [
+    { "schema": "dbo", "table": "Users", "field": "Email" },
+    { "schema": "dbo", "table": "Users", "field": "*Name" },  // FirstName, LastName, etc.
+    { "schema": "*", "table": "*", "field": "Password" }      // All password fields
+  ]
+}
+```
+
+**Important notes:**
+* Filter applies only to demo tables. Full tables (from `table_fill_full.list`) are never filtered out.
+* If a table is in `table_fill_full.list`, it will not be included in demo export, regardless of filter settings.
+* Wildcards (`*`) can appear at the beginning or end of patterns: `User*`, `*Config`, `*Data*`
+* Pattern matching is case-insensitive
+
 ## Important Notes
 
 1. #### Disabling generation via dir = null
