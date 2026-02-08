@@ -5,6 +5,7 @@ import { EDdlKind, EFilterTableFill, EFormatTableFill, EUseMode } from '../src/c
 import { Go } from '../src/go'
 import { ELoggerMode } from '../src/logger'
 
+const LOG_DIR = `./debug/log`
 const DDL_DIR = `./debug/mssql-ddl`
 const FILL_DEMO_DIR = `./debug/mssql-fill-demo`
 const FILL_FULL_DIR = `./debug/mssql-fill-full`
@@ -22,7 +23,7 @@ export function DebugMssql() {
 
 	Go({
 		log: {
-			dir: `./debug/log`,
+			dir: LOG_DIR,
 			mode: ELoggerMode.REWRITE,
 		},
 		db: {
