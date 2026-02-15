@@ -79,7 +79,7 @@ export async function GoMssql(logger: Logger, config: TConfigMssql): Promise<voi
 				if (!actualTextRes.ok) {
 					logger.error(`on exec query in MSSQL "${config.connection.host}:${config.connection.port}/${config.connection.database}"`, actualTextRes.error)
 				} else {
-					const actualText = trim(actualTextRes.result)
+					const actualText = `USE [${config.connection.database}]\nGO\n\n${trim(actualTextRes.result)}`
 					if (!currentTextRes.result) {
 						const writeRes = await fsWriteFile(schemaDir, actualText)
 						if (writeRes.error) {
