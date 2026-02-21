@@ -26,6 +26,7 @@ export function DebugMssql() {
 			dir: LOG_DIR,
 			mode: ELoggerMode.REWRITE,
 		},
+		stamp: true,
 		db: {
 			kind: EDdlKind.MSSQL,
 			connection: {

@@ -4,6 +4,8 @@ import type { Logger } from '../../logger'
 import { fsReadFile } from '../../util/fsReadFile'
 import { fsWriteFile } from '../../util/fsWriteFile'
 import { trim } from '../../util/trim'
+import { makeStamp } from '../../util/makeStamp'
+import type { TStampData } from '../../util/makeStamp'
 import { getConfigDirList } from './getConfigDirList'
 import { getDdl } from './getDdl'
 import { getDdlTableDesc } from './getDdlTableDesc'
@@ -13,7 +15,7 @@ import { getStat } from './getStatList'
 import { format } from 'sql-formatter'
 import { getTableFill } from './getTableFill'
 
-export async function GoOra(logger: Logger, config: TConfigOra): Promise<void> {
+export async function GoOra(logger: Logger, config: TConfigOra, stamp?: boolean): Promise<void> {
 	const server = new DbOra()
 	const resServerOpen = await server.open(
 		config.connection,
@@ -117,17 +119,50 @@ export async function GoOra(logger: Logger, config: TConfigOra): Promise<void> {
 				actualText = format(actualText, { language: 'plsql' })
 				actualText = trim(actualText)
 			}
-			if (object.kind === 'TABLE') {
-				const descTextRes = await getDdlTableDesc(server, schema.name, object)
-				if (!descTextRes.ok) {
+			let tableDescription = ''
+			let columnList: { object_name: string; spec: string; description: string }[] = []
+			if (object.kind === 'TABLE' || object.kind === 'VIEW') {
+				const descDataRes = await getDdlTableDesc(server, schema.name, object)
+				if (!descDataRes.ok) {
 					logger.error(
 						`on exec query in Oracle "${config.connection.host}:${config.connection.port}/${config.connection.service}"`,
-						descTextRes.error,
+						descDataRes.error,
 					)
 					object.state = 'error'
 					continue
 				}
-				actualText = trim(`${actualText}\n\n${trim(descTextRes.result)}`)
+				if (object.kind === 'TABLE') {
+					const descSqlLines: string[] = [
+						...(descDataRes.result.tableDesc
+							? [`COMMENT ON TABLE ${schema.name}.${object.name} IS '${descDataRes.result.tableDesc.replaceAll(`'`, `''`)}';`]
+							: []),
+						...descDataRes.result.columnDescs.map(
+							c => `COMMENT ON COLUMN ${schema.name}.${object.name}.${c.columnName} IS '${c.desc.replaceAll(`'`, `''`)}';`,
+						),
+					]
+					const descSqlText = descSqlLines.join('\n').trim()
+					if (descSqlText) {
+						actualText = trim(`${actualText}\n\n${descSqlText}`)
+					}
+					tableDescription = descDataRes.result.tableDesc
+				}
+				const descMap = new Map(descDataRes.result.columnDescs.map(c => [c.columnName, c.desc]))
+				columnList = descDataRes.result.columnSpecs.map(s => ({
+					object_name: s.columnName,
+					spec: s.spec,
+					description: descMap.get(s.columnName) ?? '',
+				}))
+			}
+			if (stamp) {
+				const stampData: TStampData = {
+					schema_name: schema.name,
+					object_name: object.name,
+					service: config.connection.service,
+					kind: object.kind,
+					description: tableDescription,
+					...(columnList.length > 0 ? { column_list: columnList } : {}),
+				}
+				actualText = `${makeStamp(stampData)}\n\n${actualText}`
 			}
 
 			if (!currentTextRes.result) {
@@ -230,7 +265,7 @@ export async function GoOra(logger: Logger, config: TConfigOra): Promise<void> {
 					const errorCount = objectList.filter(f => f.kind === itemStat.kind && f.state === 'error').length.toString()
 					additional.push(
 						[
-							`${itemStat.kind}`.padEnd(16, '.'),
+							`${itemStat.kind}`.padEnd(16, ' '),
 							`[error]=${errorCount.padStart(6, '0')}; `,
 							`[no changes]=${nochangeCount.padStart(6, '0')}; `,
 							`[create]=${insertCount.padStart(6, '0')}; `,
@@ -245,7 +280,7 @@ export async function GoOra(logger: Logger, config: TConfigOra): Promise<void> {
 				const errorCountFillFull = tableFillFullList.filter(f => f.state === 'error' && f.fill === 'full').length.toString()
 				additional.push(
 					[
-						`TABLE FILL FULL`.padEnd(16, '.'),
+						`TABLE FILL FULL`.padEnd(16, ' '),
 						`[error]=${errorCountFillFull.padStart(6, '0')}; `,
 						`[no changes]=${nochangeCountFillFull.padStart(6, '0')}; `,
 						`[create]=${insertCountFillFull.padStart(6, '0')}; `,
@@ -260,7 +295,7 @@ export async function GoOra(logger: Logger, config: TConfigOra): Promise<void> {
 				const errorCountFillDemo = tableFillFullList.filter(f => f.state === 'error' && f.fill === 'demo').length.toString()
 				additional.push(
 					[
-						`TABLE FILL DEMO`.padEnd(16, '.'),
+						`TABLE FILL DEMO`.padEnd(16, ' '),
 						`[error]=${errorCountFillDemo.padStart(6, '0')}; `,
 						`[no changes]=${nochangeCountFillDemo.padStart(6, '0')}; `,
 						`[create]=${insertCountFillDemo.padStart(6, '0')}; `,

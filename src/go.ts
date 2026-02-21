@@ -16,10 +16,10 @@ export async function Go(config: TConfig): Promise<void> {
 
 		switch (config.db.kind) {
 			case EDdlKind.MSSQL:
-				await GoMssql(logger, config.db)
+				await GoMssql(logger, config.db, config.stamp)
 				return
 			case EDdlKind.ORA:
-				await GoOra(logger, config.db)
+				await GoOra(logger, config.db, config.stamp)
 				return
 			case EDdlKind.PG:
 				throw new Error('PG not implemented')

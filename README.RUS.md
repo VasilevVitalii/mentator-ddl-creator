@@ -153,6 +153,54 @@ mentator-ddl-creator --conf-use ./vv-ddl-get.config.TEMPLATE.MSSQL.jsonc
 * **TABLE_FILL_FULL** - Скрипты полной выгрузки данных (INSERT) для указанных таблиц
 * **TABLE_FILL_DEMO** - Скрипты частичной выгрузки данных (настраиваемое количество строк)
 
+## Штамп (метаданные DDL)
+
+Если в корне конфига установлен параметр `stamp: true`, каждый сгенерированный DDL-скрипт получает в начале структурированный блок метаданных:
+
+```
+/*MENTATOR-DDL-CREATOR.SCHEMA.START
+{
+    "schema_name": "Person",
+    "object_name": "StateProvince",
+    "database_name": "AdventureWorks",
+    "kind": "TABLE",
+    "description": "Справочник штатов и провинций.",
+    "column_list": [
+        { "object_name": "StateProvinceID", "spec": "int IDENTITY(1, 1) NOT NULL", "description": "" },
+        { "object_name": "StateProvinceCode", "spec": "nchar(3) NOT NULL", "description": "ISO-код штата или провинции." }
+    ]
+}
+MENTATOR-DDL-CREATOR.SCHEMA.STOP*/
+```
+
+### Поля штампа
+
+| Поле | Описание |
+|---|---|
+| `schema_name` | Имя схемы. Пустая строка для объектов `DATABASE` |
+| `object_name` | Имя объекта. Для `SCHEMA` — имя схемы; для `DATABASE` — имя базы данных |
+| `database_name` | (MSSQL) Имя базы данных. Пустая строка для объектов `DATABASE` |
+| `service` | (Oracle) Имя сервиса |
+| `kind` | Тип объекта: `TABLE`, `VIEW`, `PROCEDURE`, `DATABASE`, `SCHEMA` и т.д. |
+| `description` | Описание таблицы/представления из extended properties (MSSQL) или комментариев (Oracle). Пустая строка для объектов, не являющихся `TABLE` |
+| `column_list` | Присутствует только для `TABLE` и `VIEW`. Массив дескрипторов колонок (см. ниже) |
+
+### Поля элемента column_list
+
+| Поле | Описание |
+|---|---|
+| `object_name` | Имя колонки |
+| `spec` | Спецификация колонки: тип данных с длиной/точностью, `IDENTITY`, `NULL` / `NOT NULL` (например: `nvarchar(100) NOT NULL`, `int IDENTITY(1, 1) NOT NULL`) |
+| `description` | Описание колонки из extended properties (MSSQL) или комментариев Oracle. Пустая строка, если не задано |
+
+Включить в конфиге:
+```jsonc
+{
+    "stamp": true,
+    // ...
+}
+```
+
 ## Настройка экспорта данных таблиц
 
 Утилита предоставляет гибкие опции для экспорта данных таблиц через разделы `table_fill_full` и `table_fill_demo`.

@@ -4,6 +4,8 @@ import type { Logger } from '../../logger'
 import { fsReadFile } from '../../util/fsReadFile'
 import { fsWriteFile } from '../../util/fsWriteFile'
 import { trim } from '../../util/trim'
+import { makeStamp } from '../../util/makeStamp'
+import type { TStampData } from '../../util/makeStamp'
 import { getConfigDirList } from './getConfigDirList'
 import { getDdl } from './getDdl'
 import { getDdlTableDesc } from './getDdlTableDesc'
@@ -13,7 +15,7 @@ import { getStat } from './getStatList'
 import { format } from 'sql-formatter'
 import { getTableFill } from './getTableFill'
 
-export async function GoMssql(logger: Logger, config: TConfigMssql): Promise<void> {
+export async function GoMssql(logger: Logger, config: TConfigMssql, stamp?: boolean): Promise<void> {
 	const server = new DbMssql()
 	const resServerOpen = await server.open(config.connection)
 	if (resServerOpen.error) {
@@ -44,7 +46,10 @@ export async function GoMssql(logger: Logger, config: TConfigMssql): Promise<voi
 			if (!actualTextRes.ok) {
 				logger.error(`on exec query in MSSQL "${config.connection.host}:${config.connection.port}/${config.connection.database}"`, actualTextRes.error)
 			} else {
-				const actualText = trim(actualTextRes.result)
+				let actualText = trim(actualTextRes.result)
+				if (stamp) {
+					actualText = `${makeStamp({ schema_name: '', object_name: config.connection.database, database_name: '', kind: 'DATABASE', description: '' })}\n\n${actualText}`
+				}
 				if (!currentTextRes.result) {
 					const writeRes = await fsWriteFile(dbDir, actualText)
 					if (writeRes.error) {
@@ -79,7 +84,10 @@ export async function GoMssql(logger: Logger, config: TConfigMssql): Promise<voi
 				if (!actualTextRes.ok) {
 					logger.error(`on exec query in MSSQL "${config.connection.host}:${config.connection.port}/${config.connection.database}"`, actualTextRes.error)
 				} else {
-					const actualText = `USE [${config.connection.database}]\nGO\n\n${trim(actualTextRes.result)}`
+					let actualText = `USE [${config.connection.database}]\nGO\n\n${trim(actualTextRes.result)}`
+					if (stamp) {
+						actualText = `${makeStamp({ schema_name: '', object_name: schema.name, database_name: config.connection.database, kind: 'SCHEMA', description: '' })}\n\n${actualText}`
+					}
 					if (!currentTextRes.result) {
 						const writeRes = await fsWriteFile(schemaDir, actualText)
 						if (writeRes.error) {
@@ -167,19 +175,53 @@ export async function GoMssql(logger: Logger, config: TConfigMssql): Promise<voi
 				actualText = format(actualText, { language: 'tsql' })
 				actualText = trim(actualText)
 			}
-			if (object.kind === 'TABLE') {
-				const descTextRes = await getDdlTableDesc(server, schema.name, object)
-				if (!descTextRes.ok) {
+			let tableDescription = ''
+			let columnList: { object_name: string; spec: string; description: string }[] = []
+			if (object.kind === 'TABLE' || object.kind === 'VIEW') {
+				const descDataRes = await getDdlTableDesc(server, schema.name, object)
+				if (!descDataRes.ok) {
 					logger.error(
 						`on exec query in MSSQL "${config.connection.host}:${config.connection.port}/${config.connection.database}"`,
-						descTextRes.error,
+						descDataRes.error,
 					)
 					object.state = 'error'
 					continue
 				}
-				actualText = trim(`${actualText}\n\n${trim(descTextRes.result)}`)
+				if (object.kind === 'TABLE') {
+					const descSqlLines: string[] = [
+						...(descDataRes.result.tableDesc
+							? [`EXEC sp_addextendedproperty 'MS_Description', N'${descDataRes.result.tableDesc.replaceAll(`'`, `''`)}', 'SCHEMA', N'${schema.name}', 'TABLE', N'${object.name}';`]
+							: []),
+						...descDataRes.result.columnDescs.map(
+							c => `EXEC sp_addextendedproperty 'MS_Description', N'${c.desc.replaceAll(`'`, `''`)}', 'SCHEMA', N'${schema.name}', 'TABLE', N'${object.name}', 'COLUMN', N'${c.columnName}';`,
+						),
+					]
+					const descSqlText = descSqlLines.join('\n').trim()
+					if (descSqlText) {
+						actualText = trim(`${actualText}\n\n${descSqlText}`)
+					}
+					tableDescription = descDataRes.result.tableDesc
+				}
+				const descMap = new Map(descDataRes.result.columnDescs.map(c => [c.columnName, c.desc]))
+				columnList = descDataRes.result.columnSpecs.map(s => ({
+					object_name: s.columnName,
+					spec: s.spec,
+					description: descMap.get(s.columnName) ?? '',
+				}))
 			}
-			actualText = `USE [${config.connection.database}]\nGO\n\n${actualText}`
+			if (stamp) {
+				const stampData: TStampData = {
+					schema_name: schema.name,
+					object_name: object.name,
+					database_name: config.connection.database,
+					kind: object.kind,
+					description: tableDescription,
+					...(columnList.length > 0 ? { column_list: columnList } : {}),
+				}
+				actualText = `${makeStamp(stampData)}\n\nUSE [${config.connection.database}]\nGO\n\n${actualText}`
+			} else {
+				actualText = `USE [${config.connection.database}]\nGO\n\n${actualText}`
+			}
 
 			if (!currentTextRes.result) {
 				const writeRes = await fsWriteFile(dir, actualText)

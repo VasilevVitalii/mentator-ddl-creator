@@ -152,6 +152,54 @@ The utility extracts the following database objects for Oracle:
 * **TABLE_FILL_FULL** - Full data export scripts (INSERT statements) for specified tables
 * **TABLE_FILL_DEMO** - Partial data export scripts (configurable number of rows)
 
+## Stamp (DDL Metadata)
+
+When the `stamp` parameter is set to `true` in the root of the config, each generated DDL script is prefixed with a structured metadata comment block:
+
+```
+/*MENTATOR-DDL-CREATOR.SCHEMA.START
+{
+    "schema_name": "Person",
+    "object_name": "StateProvince",
+    "database_name": "AdventureWorks",
+    "kind": "TABLE",
+    "description": "State and province lookup table.",
+    "column_list": [
+        { "object_name": "StateProvinceID", "spec": "int IDENTITY(1, 1) NOT NULL", "description": "" },
+        { "object_name": "StateProvinceCode", "spec": "nchar(3) NOT NULL", "description": "ISO standard code for the state or province." }
+    ]
+}
+MENTATOR-DDL-CREATOR.SCHEMA.STOP*/
+```
+
+### Stamp fields
+
+| Field | Description |
+|---|---|
+| `schema_name` | Schema name. Empty string for `DATABASE` objects |
+| `object_name` | Object name. For `SCHEMA` — schema name; for `DATABASE` — database name |
+| `database_name` | (MSSQL) Database name. Empty string for `DATABASE` objects |
+| `service` | (Oracle) Service name |
+| `kind` | Object type: `TABLE`, `VIEW`, `PROCEDURE`, `DATABASE`, `SCHEMA`, etc. |
+| `description` | Table/view description from extended properties (MSSQL) or comments (Oracle). Empty string for non-TABLE objects |
+| `column_list` | Present for `TABLE` and `VIEW` only. Array of column descriptors (see below) |
+
+### column_list item fields
+
+| Field | Description |
+|---|---|
+| `object_name` | Column name |
+| `spec` | Column specification: data type with length/precision, `IDENTITY`, `NULL` / `NOT NULL` (e.g. `nvarchar(100) NOT NULL`, `int IDENTITY(1, 1) NOT NULL`) |
+| `description` | Column description from extended properties (MSSQL) or Oracle column comments. Empty string if not set |
+
+Enable in config:
+```jsonc
+{
+    "stamp": true,
+    // ...
+}
+```
+
 ## Table Data Export Configuration
 
 The utility provides flexible options for exporting table data through `table_fill_full` and `table_fill_demo` sections.

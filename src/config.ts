@@ -471,6 +471,7 @@ export const SConfig = Type.Object({
 		}),
 	}),
 	db: Type.Union([SConfigOra, SConfigPg, SConfigMssql]),
+	stamp: Type.Optional(Type.Boolean({default: false, description: 'if true, adds a metadata comment block at the top of each DDL script with schema_name, object_name, database_name/service and kind fields'}))
 })
 export type TConfig = Static<typeof SConfig>
 
