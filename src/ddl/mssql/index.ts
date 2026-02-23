@@ -209,6 +209,25 @@ export async function GoMssql(logger: Logger, config: TConfigMssql, stamp?: bool
 					description: descMap.get(s.columnName) ?? '',
 				}))
 			}
+			let triggerTableName = ''
+			let triggerTableSchemaName = ''
+			if (stamp && object.kind === 'TRIGGER') {
+				const trigParentRes = await server.exec<{ TABLE_NAME: string; TABLE_SCHEMA_NAME: string }[]>(
+					[
+						`SELECT OBJECT_NAME(t.parent_id) AS TABLE_NAME,`,
+						`       s2.name AS TABLE_SCHEMA_NAME`,
+						`FROM sys.triggers t`,
+						`JOIN sys.objects o ON t.parent_id = o.object_id`,
+						`JOIN sys.schemas s ON t.schema_id = s.schema_id`,
+						`JOIN sys.schemas s2 ON o.schema_id = s2.schema_id`,
+						`WHERE s.name = '${schema.name}' AND t.name = '${object.name}'`,
+					].join('\n'),
+				)
+				if (trigParentRes.ok && trigParentRes.result[0]) {
+					triggerTableName = trigParentRes.result[0].TABLE_NAME
+					triggerTableSchemaName = trigParentRes.result[0].TABLE_SCHEMA_NAME
+				}
+			}
 			if (stamp) {
 				const stampData: TStampData = {
 					schema_name: schema.name,
@@ -216,6 +235,7 @@ export async function GoMssql(logger: Logger, config: TConfigMssql, stamp?: bool
 					database_name: config.connection.database,
 					kind: object.kind,
 					description: tableDescription,
+					...(object.kind === 'TRIGGER' && triggerTableName ? { table_schema_name: triggerTableSchemaName, table_name: triggerTableName } : {}),
 					...(columnList.length > 0 ? { column_list: columnList } : {}),
 				}
 				actualText = `${makeStamp(stampData)}\n\nUSE [${config.connection.database}]\nGO\n\n${actualText}`

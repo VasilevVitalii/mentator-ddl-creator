@@ -153,6 +153,15 @@ export async function GoOra(logger: Logger, config: TConfigOra, stamp?: boolean)
 					description: descMap.get(s.columnName) ?? '',
 				}))
 			}
+			let triggerTableName = ''
+			if (stamp && object.kind === 'TRIGGER') {
+				const trigParentRes = await server.exec<{ TABLE_NAME: string }[]>(
+					`SELECT TABLE_NAME FROM ALL_TRIGGERS WHERE OWNER = '${schema.name}' AND TRIGGER_NAME = '${object.name}'`,
+				)
+				if (trigParentRes.ok && trigParentRes.result[0]) {
+					triggerTableName = trigParentRes.result[0].TABLE_NAME
+				}
+			}
 			if (stamp) {
 				const stampData: TStampData = {
 					schema_name: schema.name,
@@ -160,6 +169,7 @@ export async function GoOra(logger: Logger, config: TConfigOra, stamp?: boolean)
 					service: config.connection.service,
 					kind: object.kind,
 					description: tableDescription,
+					...(object.kind === 'TRIGGER' && triggerTableName ? { table_name: triggerTableName } : {}),
 					...(columnList.length > 0 ? { column_list: columnList } : {}),
 				}
 				actualText = `${makeStamp(stampData)}\n\n${actualText}`

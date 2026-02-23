@@ -182,6 +182,8 @@ MENTATOR-DDL-CREATOR.SCHEMA.STOP*/
 | `service` | (Oracle) Service name |
 | `kind` | Object type: `TABLE`, `VIEW`, `PROCEDURE`, `DATABASE`, `SCHEMA`, etc. |
 | `description` | Table/view description from extended properties (MSSQL) or comments (Oracle). Empty string for non-TABLE objects |
+| `table_schema_name` | (MSSQL, `TRIGGER` only) Schema name of the table/view the trigger belongs to |
+| `table_name` | (`TRIGGER` only) Name of the table/view the trigger belongs to |
 | `column_list` | Present for `TABLE` and `VIEW` only. Array of column descriptors (see below) |
 
 ### column_list item fields

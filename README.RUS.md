@@ -183,6 +183,8 @@ MENTATOR-DDL-CREATOR.SCHEMA.STOP*/
 | `service` | (Oracle) Имя сервиса |
 | `kind` | Тип объекта: `TABLE`, `VIEW`, `PROCEDURE`, `DATABASE`, `SCHEMA` и т.д. |
 | `description` | Описание таблицы/представления из extended properties (MSSQL) или комментариев (Oracle). Пустая строка для объектов, не являющихся `TABLE` |
+| `table_schema_name` | (MSSQL, только для `TRIGGER`) Имя схемы таблицы/представления, которому принадлежит триггер |
+| `table_name` | (только для `TRIGGER`) Имя таблицы/представления, которому принадлежит триггер |
 | `column_list` | Присутствует только для `TABLE` и `VIEW`. Массив дескрипторов колонок (см. ниже) |
 
 ### Поля элемента column_list
