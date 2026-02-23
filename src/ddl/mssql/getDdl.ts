@@ -307,7 +307,11 @@ async function getDdlTrigger(server: DbMssql, schema: string, triggerName: strin
 	if (!resExec.ok) {
 		return { error: resExec.error, ok: false }
 	}
-	const text = resExec.result.map(m => m.TEXT).join('\n')
+	let text = resExec.result.map(m => m.TEXT).join('\n')
+	// When a trigger was originally created with a three-part name ([db].[schema].[trigger]),
+	// sys.sql_modules strips the database name but keeps the leading dot, e.g. ".dbo.TriggerName".
+	// Replace the malformed name with the correct schema-qualified name.
+	text = text.replace(/(CREATE\s+(?:OR\s+ALTER\s+)?TRIGGER\s+)\.[^\s(]+/i, `$1[${schema}].[${triggerName}]`)
 	return { result: text, ok: true }
 }
 
