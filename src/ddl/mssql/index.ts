@@ -214,13 +214,11 @@ export async function GoMssql(logger: Logger, config: TConfigMssql, stamp?: bool
 			if (stamp && object.kind === 'TRIGGER') {
 				const trigParentRes = await server.exec<{ TABLE_NAME: string; TABLE_SCHEMA_NAME: string }[]>(
 					[
-						`SELECT OBJECT_NAME(t.parent_id) AS TABLE_NAME,`,
-						`       s2.name AS TABLE_SCHEMA_NAME`,
-						`FROM sys.triggers t`,
-						`JOIN sys.objects o ON t.parent_id = o.object_id`,
-						`JOIN sys.schemas s ON t.schema_id = s.schema_id`,
-						`JOIN sys.schemas s2 ON o.schema_id = s2.schema_id`,
-						`WHERE s.name = '${schema.name}' AND t.name = '${object.name}'`,
+						`SELECT`,
+						`    OBJECT_NAME(parent_id) AS TABLE_NAME,`,
+						`    OBJECT_SCHEMA_NAME(parent_id) AS TABLE_SCHEMA_NAME`,
+						`FROM sys.triggers`,
+						`WHERE object_id = OBJECT_ID(N'${schema.name}.${object.name}')`,
 					].join('\n'),
 				)
 				if (trigParentRes.ok && trigParentRes.result[0]) {
