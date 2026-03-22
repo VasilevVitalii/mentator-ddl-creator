@@ -1,6 +1,7 @@
 import type { DbMssql } from '../../db/mssql'
 import type { TResult } from '../../tresult'
 import type { TObjectMssql } from './getSchemaList'
+import type { TStampParam } from '../../util/makeStamp'
 
 export type TTableDescData = {
 	tableDesc: string
@@ -162,6 +163,65 @@ export async function getDdlTableDesc(server: DbMssql, schema: string, object: T
 			columnDescs: resExec2.result.map(m => ({ columnName: m.COLUMN_NAME, desc: m.COMMENTS })),
 			columnSpecs,
 		},
+		ok: true,
+	}
+}
+
+type TMssqlParamRow = {
+	PARAM_NAME: string
+	TYPE_NAME: string
+	MAX_LENGTH: number
+	PRECISION: number
+	SCALE: number
+	IS_OUTPUT: boolean
+}
+
+function buildParamSpec(row: TMssqlParamRow): string {
+	const typeName = row.TYPE_NAME.toLowerCase()
+	let spec = row.TYPE_NAME
+	if (['varchar', 'char', 'varbinary', 'binary'].includes(typeName)) {
+		spec += row.MAX_LENGTH === -1 ? '(MAX)' : `(${row.MAX_LENGTH})`
+	} else if (['nvarchar', 'nchar'].includes(typeName)) {
+		spec += row.MAX_LENGTH === -1 ? '(MAX)' : `(${Math.floor(row.MAX_LENGTH / 2)})`
+	} else if (['decimal', 'numeric'].includes(typeName)) {
+		spec += `(${row.PRECISION}, ${row.SCALE})`
+	} else if (['datetime2', 'datetimeoffset', 'time'].includes(typeName)) {
+		spec += `(${row.SCALE})`
+	}
+	if (row.IS_OUTPUT) {
+		spec += ' OUTPUT'
+	}
+	return spec
+}
+
+export async function getDdlParamList(server: DbMssql, schema: string, objectName: string): Promise<TResult<TStampParam[]>> {
+	const script = [
+		`SELECT`,
+		`    p.name AS PARAM_NAME,`,
+		`    tp.name AS TYPE_NAME,`,
+		`    p.max_length AS MAX_LENGTH,`,
+		`    p.precision AS PRECISION,`,
+		`    p.scale AS SCALE,`,
+		`    p.is_output AS IS_OUTPUT`,
+		`FROM sys.parameters p`,
+		`JOIN sys.objects o ON p.object_id = o.object_id`,
+		`JOIN sys.schemas s ON o.schema_id = s.schema_id`,
+		`JOIN sys.types tp ON p.user_type_id = tp.user_type_id`,
+		`WHERE s.name = '${schema}' AND o.name = '${objectName}'`,
+		`  AND p.parameter_id > 0`,
+		`ORDER BY p.parameter_id`,
+	].join('\n')
+
+	const resExec = await server.exec<TMssqlParamRow[]>(script)
+	if (!resExec.ok) {
+		return { error: resExec.error, ok: false }
+	}
+
+	return {
+		result: resExec.result.map(row => ({
+			object_name: row.PARAM_NAME,
+			spec: buildParamSpec(row),
+		})),
 		ok: true,
 	}
 }

@@ -8,7 +8,7 @@ import { makeStamp } from '../../util/makeStamp'
 import type { TStampData } from '../../util/makeStamp'
 import { getConfigDirList } from './getConfigDirList'
 import { getDdl } from './getDdl'
-import { getDdlTableDesc } from './getDdlTableDesc'
+import { getDdlTableDesc, getDdlParamList } from './getDdlTableDesc'
 import { getDir } from './getDir'
 import { getSchemaList } from './getSchemaList'
 import { getStat } from './getStatList'
@@ -121,6 +121,7 @@ export async function GoOra(logger: Logger, config: TConfigOra, stamp?: boolean)
 			}
 			let tableDescription = ''
 			let columnList: { object_name: string; spec: string; description: string }[] = []
+			let paramList: { object_name: string; spec: string }[] = []
 			if (object.kind === 'TABLE' || object.kind === 'VIEW') {
 				const descDataRes = await getDdlTableDesc(server, schema.name, object)
 				if (!descDataRes.ok) {
@@ -153,6 +154,18 @@ export async function GoOra(logger: Logger, config: TConfigOra, stamp?: boolean)
 					description: descMap.get(s.columnName) ?? '',
 				}))
 			}
+			if (stamp && (object.kind === 'PROCEDURE' || object.kind === 'FUNCTION')) {
+				const paramListRes = await getDdlParamList(server, schema.name, object.name)
+				if (!paramListRes.ok) {
+					logger.error(
+						`on exec query in Oracle "${config.connection.host}:${config.connection.port}/${config.connection.service}"`,
+						paramListRes.error,
+					)
+					object.state = 'error'
+					continue
+				}
+				paramList = paramListRes.result
+			}
 			let triggerTableName = ''
 			if (stamp && object.kind === 'TRIGGER') {
 				const trigParentRes = await server.exec<{ TABLE_NAME: string }[]>(
@@ -171,6 +184,7 @@ export async function GoOra(logger: Logger, config: TConfigOra, stamp?: boolean)
 					description: tableDescription,
 					...(object.kind === 'TRIGGER' && triggerTableName ? { table_name: triggerTableName } : {}),
 					...(columnList.length > 0 ? { column_list: columnList } : {}),
+					...(paramList.length > 0 ? { param_list: paramList } : {}),
 				}
 				actualText = `${makeStamp(stampData)}\n\n${actualText}`
 			}

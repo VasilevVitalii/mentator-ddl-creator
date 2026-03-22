@@ -1,3 +1,8 @@
+export type TStampParam = {
+	object_name: string
+	spec: string
+}
+
 export type TStampColumn = {
 	object_name: string
 	spec: string
@@ -5,7 +10,7 @@ export type TStampColumn = {
 }
 
 export type TStampData = {
-	[key: string]: string | TStampColumn[]
+	[key: string]: string | TStampColumn[] | TStampParam[]
 }
 
 export function makeStamp(data: TStampData): string {

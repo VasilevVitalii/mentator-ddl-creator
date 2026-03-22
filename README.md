@@ -172,6 +172,24 @@ When the `stamp` parameter is set to `true` in the root of the config, each gene
 MENTATOR-DDL-CREATOR.SCHEMA.STOP*/
 ```
 
+Procedure/function example:
+
+```
+/*MENTATOR-DDL-CREATOR.SCHEMA.START
+{
+    "schema_name": "dbo",
+    "object_name": "GetUserById",
+    "database_name": "AdventureWorks",
+    "kind": "PROCEDURE",
+    "description": "",
+    "param_list": [
+        { "object_name": "@userId", "spec": "int" },
+        { "object_name": "@result", "spec": "nvarchar(255) OUTPUT" }
+    ]
+}
+MENTATOR-DDL-CREATOR.SCHEMA.STOP*/
+```
+
 ### Stamp fields
 
 | Field | Description |
@@ -185,6 +203,7 @@ MENTATOR-DDL-CREATOR.SCHEMA.STOP*/
 | `table_schema_name` | (MSSQL, `TRIGGER` only) Schema name of the table/view the trigger belongs to |
 | `table_name` | (`TRIGGER` only) Name of the table/view the trigger belongs to |
 | `column_list` | Present for `TABLE` and `VIEW` only. Array of column descriptors (see below) |
+| `param_list` | Present for `PROCEDURE` and `FUNCTION` only. Array of parameter descriptors (see below) |
 
 ### column_list item fields
 
@@ -193,6 +212,13 @@ MENTATOR-DDL-CREATOR.SCHEMA.STOP*/
 | `object_name` | Column name |
 | `spec` | Column specification: data type with length/precision, `IDENTITY`, `NULL` / `NOT NULL` (e.g. `nvarchar(100) NOT NULL`, `int IDENTITY(1, 1) NOT NULL`) |
 | `description` | Column description from extended properties (MSSQL) or Oracle column comments. Empty string if not set |
+
+### param_list item fields
+
+| Field | Description |
+|---|---|
+| `object_name` | Parameter name (e.g. `@userId` for MSSQL, `p_user_id` for Oracle) |
+| `spec` | Parameter specification: data type with length/precision and direction. MSSQL: `int`, `nvarchar(100) OUTPUT`. Oracle: `IN NUMBER(10, 2)`, `OUT VARCHAR2(100 CHAR)`, `IN/OUT DATE` |
 
 Enable in config:
 ```jsonc

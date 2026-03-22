@@ -8,7 +8,7 @@ import { makeStamp } from '../../util/makeStamp'
 import type { TStampData } from '../../util/makeStamp'
 import { getConfigDirList } from './getConfigDirList'
 import { getDdl } from './getDdl'
-import { getDdlTableDesc } from './getDdlTableDesc'
+import { getDdlTableDesc, getDdlParamList } from './getDdlTableDesc'
 import { getDir } from './getDir'
 import { getSchemaList } from './getSchemaList'
 import { getStat } from './getStatList'
@@ -177,6 +177,7 @@ export async function GoMssql(logger: Logger, config: TConfigMssql, stamp?: bool
 			}
 			let tableDescription = ''
 			let columnList: { object_name: string; spec: string; description: string }[] = []
+			let paramList: { object_name: string; spec: string }[] = []
 			if (object.kind === 'TABLE' || object.kind === 'VIEW') {
 				const descDataRes = await getDdlTableDesc(server, schema.name, object)
 				if (!descDataRes.ok) {
@@ -209,6 +210,18 @@ export async function GoMssql(logger: Logger, config: TConfigMssql, stamp?: bool
 					description: descMap.get(s.columnName) ?? '',
 				}))
 			}
+			if (stamp && (object.kind === 'PROCEDURE' || object.kind === 'FUNCTION')) {
+				const paramListRes = await getDdlParamList(server, schema.name, object.name)
+				if (!paramListRes.ok) {
+					logger.error(
+						`on exec query in MSSQL "${config.connection.host}:${config.connection.port}/${config.connection.database}"`,
+						paramListRes.error,
+					)
+					object.state = 'error'
+					continue
+				}
+				paramList = paramListRes.result
+			}
 			let triggerTableName = ''
 			let triggerTableSchemaName = ''
 			if (stamp && object.kind === 'TRIGGER') {
@@ -235,6 +248,7 @@ export async function GoMssql(logger: Logger, config: TConfigMssql, stamp?: bool
 					description: tableDescription,
 					...(object.kind === 'TRIGGER' && triggerTableName ? { table_schema_name: triggerTableSchemaName, table_name: triggerTableName } : {}),
 					...(columnList.length > 0 ? { column_list: columnList } : {}),
+					...(paramList.length > 0 ? { param_list: paramList } : {}),
 				}
 				actualText = `${makeStamp(stampData)}\n\nUSE [${config.connection.database}]\nGO\n\n${actualText}`
 			} else {

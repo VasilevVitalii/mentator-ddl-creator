@@ -173,6 +173,24 @@ mentator-ddl-creator --conf-use ./vv-ddl-get.config.TEMPLATE.MSSQL.jsonc
 MENTATOR-DDL-CREATOR.SCHEMA.STOP*/
 ```
 
+Пример для процедуры/функции:
+
+```
+/*MENTATOR-DDL-CREATOR.SCHEMA.START
+{
+    "schema_name": "dbo",
+    "object_name": "GetUserById",
+    "database_name": "AdventureWorks",
+    "kind": "PROCEDURE",
+    "description": "",
+    "param_list": [
+        { "object_name": "@userId", "spec": "int" },
+        { "object_name": "@result", "spec": "nvarchar(255) OUTPUT" }
+    ]
+}
+MENTATOR-DDL-CREATOR.SCHEMA.STOP*/
+```
+
 ### Поля штампа
 
 | Поле | Описание |
@@ -186,6 +204,7 @@ MENTATOR-DDL-CREATOR.SCHEMA.STOP*/
 | `table_schema_name` | (MSSQL, только для `TRIGGER`) Имя схемы таблицы/представления, которому принадлежит триггер |
 | `table_name` | (только для `TRIGGER`) Имя таблицы/представления, которому принадлежит триггер |
 | `column_list` | Присутствует только для `TABLE` и `VIEW`. Массив дескрипторов колонок (см. ниже) |
+| `param_list` | Присутствует только для `PROCEDURE` и `FUNCTION`. Массив дескрипторов параметров (см. ниже) |
 
 ### Поля элемента column_list
 
@@ -194,6 +213,13 @@ MENTATOR-DDL-CREATOR.SCHEMA.STOP*/
 | `object_name` | Имя колонки |
 | `spec` | Спецификация колонки: тип данных с длиной/точностью, `IDENTITY`, `NULL` / `NOT NULL` (например: `nvarchar(100) NOT NULL`, `int IDENTITY(1, 1) NOT NULL`) |
 | `description` | Описание колонки из extended properties (MSSQL) или комментариев Oracle. Пустая строка, если не задано |
+
+### Поля элемента param_list
+
+| Поле | Описание |
+|---|---|
+| `object_name` | Имя параметра (например, `@userId` для MSSQL, `p_user_id` для Oracle) |
+| `spec` | Спецификация параметра: тип данных с длиной/точностью и направление. MSSQL: `int`, `nvarchar(100) OUTPUT`. Oracle: `IN NUMBER(10, 2)`, `OUT VARCHAR2(100 CHAR)`, `IN/OUT DATE` |
 
 Включить в конфиге:
 ```jsonc

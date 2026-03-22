@@ -1,6 +1,7 @@
 import type { DbOra } from '../../db/ora'
 import type { TResult } from '../../tresult'
 import type { TObjectOra } from './getSchemaList'
+import type { TStampParam } from '../../util/makeStamp'
 
 export type TTableDescData = {
 	tableDesc: string
@@ -74,6 +75,65 @@ export async function getDdlTableDesc(server: DbOra, schema: string, object: TOb
 			columnDescs: resExec2.result.map(m => ({ columnName: m.COLUMN_NAME, desc: m.COMMENTS })),
 			columnSpecs: resExec3.result.map(row => ({ columnName: row.COLUMN_NAME, spec: buildOraColumnSpec(row) })),
 		},
+		ok: true,
+	}
+}
+
+type TOraParamRow = {
+	ARGUMENT_NAME: string
+	DATA_TYPE: string
+	DATA_LENGTH: number
+	DATA_PRECISION: number | null
+	DATA_SCALE: number | null
+	CHAR_LENGTH: number
+	CHAR_USED: string | null
+	IN_OUT: string
+}
+
+function buildOraParamSpec(row: TOraParamRow): string {
+	const dataType = row.DATA_TYPE
+	let typeSpec = dataType
+
+	if (['VARCHAR2', 'CHAR', 'NVARCHAR2', 'NCHAR'].includes(dataType)) {
+		const len = row.CHAR_LENGTH || row.DATA_LENGTH
+		const unit = row.CHAR_USED === 'C' ? ' CHAR' : ' BYTE'
+		typeSpec += `(${len}${unit})`
+	} else if (dataType === 'NUMBER') {
+		if (row.DATA_PRECISION !== null) {
+			typeSpec += row.DATA_SCALE !== null && row.DATA_SCALE !== 0 ? `(${row.DATA_PRECISION}, ${row.DATA_SCALE})` : `(${row.DATA_PRECISION})`
+		}
+	} else if (dataType === 'FLOAT') {
+		if (row.DATA_PRECISION !== null) {
+			typeSpec += `(${row.DATA_PRECISION})`
+		}
+	} else if (dataType === 'RAW') {
+		typeSpec += `(${row.DATA_LENGTH})`
+	}
+
+	return `${row.IN_OUT} ${typeSpec}`
+}
+
+export async function getDdlParamList(server: DbOra, schema: string, objectName: string): Promise<TResult<TStampParam[]>> {
+	const script = [
+		`SELECT ARGUMENT_NAME, DATA_TYPE, DATA_LENGTH, DATA_PRECISION, DATA_SCALE,`,
+		`       CHAR_LENGTH, CHAR_USED, IN_OUT`,
+		`FROM ALL_ARGUMENTS`,
+		`WHERE OWNER = '${schema}' AND OBJECT_NAME = '${objectName}'`,
+		`  AND PACKAGE_NAME IS NULL`,
+		`  AND ARGUMENT_NAME IS NOT NULL`,
+		`ORDER BY POSITION`,
+	].join('\n')
+
+	const resExec = await server.exec<TOraParamRow[]>(script)
+	if (!resExec.ok) {
+		return { error: resExec.error, ok: false }
+	}
+
+	return {
+		result: resExec.result.map(row => ({
+			object_name: row.ARGUMENT_NAME,
+			spec: buildOraParamSpec(row),
+		})),
 		ok: true,
 	}
 }
