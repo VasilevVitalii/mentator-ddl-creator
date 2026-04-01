@@ -227,7 +227,7 @@ MENTATOR-DDL-CREATOR.SCHEMA.STOP*/
 | Field | Description |
 |---|---|
 | `column_list` | Array of column pairs: `column_my` — column in this table, `column_ref` — referenced column |
-| `ref` | Referenced table in `schema.table` format (e.g. `dbo.Users`, `HR.EMPLOYEES`) |
+| `ref` | Referenced table: object with `schema_name` and `object_name` fields |
 
 ### uses_list item fields
 

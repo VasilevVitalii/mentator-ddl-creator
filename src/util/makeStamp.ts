@@ -11,7 +11,7 @@ export type TStampColumn = {
 
 export type TStampForeignKey = {
 	column_list: { column_my: string; column_ref: string }[]
-	ref: string
+	ref: { schema_name: string; object_name: string }
 }
 
 export type TStampUses = {

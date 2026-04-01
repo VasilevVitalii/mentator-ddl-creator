@@ -170,7 +170,7 @@ export async function getDdlForeignList(server: DbOra, schema: string, objectNam
 	const map = new Map<string, TStampForeignKey>()
 	for (const row of resExec.result) {
 		if (!map.has(row.FK_NAME)) {
-			map.set(row.FK_NAME, { ref: `${row.REF_SCHEMA}.${row.REF_TABLE}`, column_list: [] })
+			map.set(row.FK_NAME, { ref: { schema_name: row.REF_SCHEMA, object_name: row.REF_TABLE }, column_list: [] })
 		}
 		map.get(row.FK_NAME)!.column_list.push({ column_my: row.COLUMN_MY, column_ref: row.COLUMN_REF })
 	}

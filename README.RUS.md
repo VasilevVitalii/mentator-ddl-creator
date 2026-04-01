@@ -228,7 +228,7 @@ MENTATOR-DDL-CREATOR.SCHEMA.STOP*/
 | Поле | Описание |
 |---|---|
 | `column_list` | Массив пар колонок: `column_my` — колонка данной таблицы, `column_ref` — колонка в целевой таблице |
-| `ref` | Ссылка на целевую таблицу в формате `schema.table` (например, `dbo.Users`, `HR.EMPLOYEES`) |
+| `ref` | Целевая таблица: объект с полями `schema_name` и `object_name` |
 
 ### Поля элемента uses_list
 
