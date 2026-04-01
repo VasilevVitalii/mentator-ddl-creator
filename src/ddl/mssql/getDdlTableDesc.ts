@@ -1,7 +1,7 @@
 import type { DbMssql } from '../../db/mssql'
 import type { TResult } from '../../tresult'
 import type { TObjectMssql } from './getSchemaList'
-import type { TStampParam } from '../../util/makeStamp'
+import type { TStampParam, TStampForeignKey } from '../../util/makeStamp'
 
 export type TTableDescData = {
 	tableDesc: string
@@ -224,4 +224,48 @@ export async function getDdlParamList(server: DbMssql, schema: string, objectNam
 		})),
 		ok: true,
 	}
+}
+
+type TMssqlFKRow = {
+	FK_NAME: string
+	COLUMN_MY: string
+	COLUMN_REF: string
+	REF_SCHEMA: string
+	REF_TABLE: string
+}
+
+export async function getDdlForeignList(server: DbMssql, schema: string, objectName: string): Promise<TResult<TStampForeignKey[]>> {
+	const script = [
+		`SELECT`,
+		`    fk.name AS FK_NAME,`,
+		`    cc.name AS COLUMN_MY,`,
+		`    rc.name AS COLUMN_REF,`,
+		`    rs.name AS REF_SCHEMA,`,
+		`    rt.name AS REF_TABLE`,
+		`FROM sys.foreign_keys fk`,
+		`JOIN sys.foreign_key_columns fkc ON fk.object_id = fkc.constraint_object_id`,
+		`JOIN sys.tables t ON fk.parent_object_id = t.object_id`,
+		`JOIN sys.schemas s ON t.schema_id = s.schema_id`,
+		`JOIN sys.columns cc ON fkc.parent_object_id = cc.object_id AND fkc.parent_column_id = cc.column_id`,
+		`JOIN sys.tables rt ON fk.referenced_object_id = rt.object_id`,
+		`JOIN sys.schemas rs ON rt.schema_id = rs.schema_id`,
+		`JOIN sys.columns rc ON fkc.referenced_object_id = rc.object_id AND fkc.referenced_column_id = rc.column_id`,
+		`WHERE s.name = '${schema}' AND t.name = '${objectName}'`,
+		`ORDER BY fk.name, fkc.constraint_column_id`,
+	].join('\n')
+
+	const resExec = await server.exec<TMssqlFKRow[]>(script)
+	if (!resExec.ok) {
+		return { error: resExec.error, ok: false }
+	}
+
+	const map = new Map<string, TStampForeignKey>()
+	for (const row of resExec.result) {
+		if (!map.has(row.FK_NAME)) {
+			map.set(row.FK_NAME, { ref: `${row.REF_SCHEMA}.${row.REF_TABLE}`, column_list: [] })
+		}
+		map.get(row.FK_NAME)!.column_list.push({ column_my: row.COLUMN_MY, column_ref: row.COLUMN_REF })
+	}
+
+	return { result: [...map.values()], ok: true }
 }

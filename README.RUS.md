@@ -205,6 +205,7 @@ MENTATOR-DDL-CREATOR.SCHEMA.STOP*/
 | `table_name` | (только для `TRIGGER`) Имя таблицы/представления, которому принадлежит триггер |
 | `column_list` | Присутствует только для `TABLE` и `VIEW`. Массив дескрипторов колонок (см. ниже) |
 | `param_list` | Присутствует только для `PROCEDURE` и `FUNCTION`. Массив дескрипторов параметров (см. ниже) |
+| `foreign_list` | Присутствует только для `TABLE` (если есть внешние ключи). Массив дескрипторов внешних ключей (см. ниже) |
 
 ### Поля элемента column_list
 
@@ -220,6 +221,13 @@ MENTATOR-DDL-CREATOR.SCHEMA.STOP*/
 |---|---|
 | `object_name` | Имя параметра (например, `@userId` для MSSQL, `p_user_id` для Oracle) |
 | `spec` | Спецификация параметра: тип данных с длиной/точностью и направление. MSSQL: `int`, `nvarchar(100) OUTPUT`. Oracle: `IN NUMBER(10, 2)`, `OUT VARCHAR2(100 CHAR)`, `IN/OUT DATE` |
+
+### Поля элемента foreign_list
+
+| Поле | Описание |
+|---|---|
+| `column_list` | Массив пар колонок: `column_my` — колонка данной таблицы, `column_ref` — колонка в целевой таблице |
+| `ref` | Ссылка на целевую таблицу в формате `schema.table` (например, `dbo.Users`, `HR.EMPLOYEES`) |
 
 Включить в конфиге:
 ```jsonc

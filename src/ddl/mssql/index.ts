@@ -5,10 +5,10 @@ import { fsReadFile } from '../../util/fsReadFile'
 import { fsWriteFile } from '../../util/fsWriteFile'
 import { trim } from '../../util/trim'
 import { makeStamp } from '../../util/makeStamp'
-import type { TStampData } from '../../util/makeStamp'
+import type { TStampData, TStampForeignKey } from '../../util/makeStamp'
 import { getConfigDirList } from './getConfigDirList'
 import { getDdl } from './getDdl'
-import { getDdlTableDesc, getDdlParamList } from './getDdlTableDesc'
+import { getDdlTableDesc, getDdlParamList, getDdlForeignList } from './getDdlTableDesc'
 import { getDir } from './getDir'
 import { getSchemaList } from './getSchemaList'
 import { getStat } from './getStatList'
@@ -178,6 +178,7 @@ export async function GoMssql(logger: Logger, config: TConfigMssql, stamp?: bool
 			let tableDescription = ''
 			let columnList: { object_name: string; spec: string; description: string }[] = []
 			let paramList: { object_name: string; spec: string }[] = []
+			let foreignList: TStampForeignKey[] = []
 			if (object.kind === 'TABLE' || object.kind === 'VIEW') {
 				const descDataRes = await getDdlTableDesc(server, schema.name, object)
 				if (!descDataRes.ok) {
@@ -222,6 +223,18 @@ export async function GoMssql(logger: Logger, config: TConfigMssql, stamp?: bool
 				}
 				paramList = paramListRes.result
 			}
+			if (stamp && object.kind === 'TABLE') {
+				const foreignListRes = await getDdlForeignList(server, schema.name, object.name)
+				if (!foreignListRes.ok) {
+					logger.error(
+						`on exec query in MSSQL "${config.connection.host}:${config.connection.port}/${config.connection.database}"`,
+						foreignListRes.error,
+					)
+					object.state = 'error'
+					continue
+				}
+				foreignList = foreignListRes.result
+			}
 			let triggerTableName = ''
 			let triggerTableSchemaName = ''
 			if (stamp && object.kind === 'TRIGGER') {
@@ -249,6 +262,7 @@ export async function GoMssql(logger: Logger, config: TConfigMssql, stamp?: bool
 					...(object.kind === 'TRIGGER' && triggerTableName ? { table_schema_name: triggerTableSchemaName, table_name: triggerTableName } : {}),
 					...(columnList.length > 0 ? { column_list: columnList } : {}),
 					...(paramList.length > 0 ? { param_list: paramList } : {}),
+					...(foreignList.length > 0 ? { foreign_list: foreignList } : {}),
 				}
 				actualText = `${makeStamp(stampData)}\n\nUSE [${config.connection.database}]\nGO\n\n${actualText}`
 			} else {

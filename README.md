@@ -204,6 +204,7 @@ MENTATOR-DDL-CREATOR.SCHEMA.STOP*/
 | `table_name` | (`TRIGGER` only) Name of the table/view the trigger belongs to |
 | `column_list` | Present for `TABLE` and `VIEW` only. Array of column descriptors (see below) |
 | `param_list` | Present for `PROCEDURE` and `FUNCTION` only. Array of parameter descriptors (see below) |
+| `foreign_list` | Present for `TABLE` only (when foreign keys exist). Array of foreign key descriptors (see below) |
 
 ### column_list item fields
 
@@ -219,6 +220,13 @@ MENTATOR-DDL-CREATOR.SCHEMA.STOP*/
 |---|---|
 | `object_name` | Parameter name (e.g. `@userId` for MSSQL, `p_user_id` for Oracle) |
 | `spec` | Parameter specification: data type with length/precision and direction. MSSQL: `int`, `nvarchar(100) OUTPUT`. Oracle: `IN NUMBER(10, 2)`, `OUT VARCHAR2(100 CHAR)`, `IN/OUT DATE` |
+
+### foreign_list item fields
+
+| Field | Description |
+|---|---|
+| `column_list` | Array of column pairs: `column_my` — column in this table, `column_ref` — referenced column |
+| `ref` | Referenced table in `schema.table` format (e.g. `dbo.Users`, `HR.EMPLOYEES`) |
 
 Enable in config:
 ```jsonc

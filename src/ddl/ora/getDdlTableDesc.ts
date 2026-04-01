@@ -1,7 +1,7 @@
 import type { DbOra } from '../../db/ora'
 import type { TResult } from '../../tresult'
 import type { TObjectOra } from './getSchemaList'
-import type { TStampParam } from '../../util/makeStamp'
+import type { TStampParam, TStampForeignKey } from '../../util/makeStamp'
 
 export type TTableDescData = {
 	tableDesc: string
@@ -136,4 +136,44 @@ export async function getDdlParamList(server: DbOra, schema: string, objectName:
 		})),
 		ok: true,
 	}
+}
+
+type TOraFKRow = {
+	FK_NAME: string
+	COLUMN_MY: string
+	COLUMN_REF: string
+	REF_SCHEMA: string
+	REF_TABLE: string
+}
+
+export async function getDdlForeignList(server: DbOra, schema: string, objectName: string): Promise<TResult<TStampForeignKey[]>> {
+	const script = [
+		`SELECT`,
+		`    c.constraint_name AS FK_NAME,`,
+		`    cc.column_name AS COLUMN_MY,`,
+		`    rc.column_name AS COLUMN_REF,`,
+		`    r.owner AS REF_SCHEMA,`,
+		`    r.table_name AS REF_TABLE`,
+		`FROM all_constraints c`,
+		`JOIN all_cons_columns cc ON c.owner = cc.owner AND c.constraint_name = cc.constraint_name`,
+		`JOIN all_constraints r ON c.r_owner = r.owner AND c.r_constraint_name = r.constraint_name`,
+		`JOIN all_cons_columns rc ON r.owner = rc.owner AND r.constraint_name = rc.constraint_name AND cc.position = rc.position`,
+		`WHERE c.owner = '${schema}' AND c.table_name = '${objectName}' AND c.constraint_type = 'R'`,
+		`ORDER BY c.constraint_name, cc.position`,
+	].join('\n')
+
+	const resExec = await server.exec<TOraFKRow[]>(script)
+	if (!resExec.ok) {
+		return { error: resExec.error, ok: false }
+	}
+
+	const map = new Map<string, TStampForeignKey>()
+	for (const row of resExec.result) {
+		if (!map.has(row.FK_NAME)) {
+			map.set(row.FK_NAME, { ref: `${row.REF_SCHEMA}.${row.REF_TABLE}`, column_list: [] })
+		}
+		map.get(row.FK_NAME)!.column_list.push({ column_my: row.COLUMN_MY, column_ref: row.COLUMN_REF })
+	}
+
+	return { result: [...map.values()], ok: true }
 }

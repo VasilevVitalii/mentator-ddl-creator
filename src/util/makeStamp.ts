@@ -9,8 +9,13 @@ export type TStampColumn = {
 	description: string
 }
 
+export type TStampForeignKey = {
+	column_list: { column_my: string; column_ref: string }[]
+	ref: string
+}
+
 export type TStampData = {
-	[key: string]: string | TStampColumn[] | TStampParam[]
+	[key: string]: string | TStampColumn[] | TStampParam[] | TStampForeignKey[]
 }
 
 export function makeStamp(data: TStampData): string {
