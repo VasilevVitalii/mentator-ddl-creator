@@ -14,8 +14,15 @@ export type TStampForeignKey = {
 	ref: string
 }
 
+export type TStampUses = {
+	schema_name: string
+	object_name: string
+	database_name: string
+	kind: string
+}
+
 export type TStampData = {
-	[key: string]: string | TStampColumn[] | TStampParam[] | TStampForeignKey[]
+	[key: string]: string | TStampColumn[] | TStampParam[] | TStampForeignKey[] | TStampUses[]
 }
 
 export function makeStamp(data: TStampData): string {

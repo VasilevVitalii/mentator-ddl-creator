@@ -205,6 +205,7 @@ MENTATOR-DDL-CREATOR.SCHEMA.STOP*/
 | `column_list` | Present for `TABLE` and `VIEW` only. Array of column descriptors (see below) |
 | `param_list` | Present for `PROCEDURE` and `FUNCTION` only. Array of parameter descriptors (see below) |
 | `foreign_list` | Present for `TABLE` only (when foreign keys exist). Array of foreign key descriptors (see below) |
+| `uses_list` | Present for any object (when dependencies exist). Array of objects used by this object (see below) |
 
 ### column_list item fields
 
@@ -227,6 +228,15 @@ MENTATOR-DDL-CREATOR.SCHEMA.STOP*/
 |---|---|
 | `column_list` | Array of column pairs: `column_my` — column in this table, `column_ref` — referenced column |
 | `ref` | Referenced table in `schema.table` format (e.g. `dbo.Users`, `HR.EMPLOYEES`) |
+
+### uses_list item fields
+
+| Field | Description |
+|---|---|
+| `schema_name` | Schema of the referenced object |
+| `object_name` | Name of the referenced object |
+| `database_name` | Database of the referenced object. For MSSQL — current database for local objects, actual database name for cross-database references. For Oracle — always empty string |
+| `kind` | Type of the referenced object: `TABLE`, `VIEW`, `PROCEDURE`, `FUNCTION`, `TRIGGER`, `SYNONYM`, `SEQUENCE`, `PACKAGE` (Oracle), `TYPE` (Oracle), etc. |
 
 Enable in config:
 ```jsonc

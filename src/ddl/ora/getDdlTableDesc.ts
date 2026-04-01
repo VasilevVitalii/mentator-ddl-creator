@@ -1,7 +1,7 @@
 import type { DbOra } from '../../db/ora'
 import type { TResult } from '../../tresult'
 import type { TObjectOra } from './getSchemaList'
-import type { TStampParam, TStampForeignKey } from '../../util/makeStamp'
+import type { TStampParam, TStampForeignKey, TStampUses } from '../../util/makeStamp'
 
 export type TTableDescData = {
 	tableDesc: string
@@ -176,4 +176,38 @@ export async function getDdlForeignList(server: DbOra, schema: string, objectNam
 	}
 
 	return { result: [...map.values()], ok: true }
+}
+
+type TOraUsesRow = {
+	SCHEMA_NAME: string
+	OBJECT_NAME: string
+	KIND: string
+}
+
+export async function getDdlUsesList(server: DbOra, schema: string, objectName: string): Promise<TResult<TStampUses[]>> {
+	const script = [
+		`SELECT`,
+		`    referenced_owner AS SCHEMA_NAME,`,
+		`    referenced_name AS OBJECT_NAME,`,
+		`    referenced_type AS KIND`,
+		`FROM ALL_DEPENDENCIES`,
+		`WHERE owner = '${schema}' AND name = '${objectName}'`,
+		`  AND referenced_type IN ('TABLE', 'VIEW', 'PROCEDURE', 'FUNCTION', 'PACKAGE', 'SEQUENCE', 'SYNONYM', 'TRIGGER', 'TYPE', 'MATERIALIZED VIEW')`,
+		`ORDER BY referenced_name`,
+	].join('\n')
+
+	const resExec = await server.exec<TOraUsesRow[]>(script)
+	if (!resExec.ok) {
+		return { error: resExec.error, ok: false }
+	}
+
+	return {
+		result: resExec.result.map(row => ({
+			schema_name: row.SCHEMA_NAME,
+			object_name: row.OBJECT_NAME,
+			database_name: '',
+			kind: row.KIND,
+		})),
+		ok: true,
+	}
 }

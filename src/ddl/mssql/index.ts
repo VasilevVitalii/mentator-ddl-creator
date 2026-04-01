@@ -5,10 +5,10 @@ import { fsReadFile } from '../../util/fsReadFile'
 import { fsWriteFile } from '../../util/fsWriteFile'
 import { trim } from '../../util/trim'
 import { makeStamp } from '../../util/makeStamp'
-import type { TStampData, TStampForeignKey } from '../../util/makeStamp'
+import type { TStampData, TStampForeignKey, TStampUses } from '../../util/makeStamp'
 import { getConfigDirList } from './getConfigDirList'
 import { getDdl } from './getDdl'
-import { getDdlTableDesc, getDdlParamList, getDdlForeignList } from './getDdlTableDesc'
+import { getDdlTableDesc, getDdlParamList, getDdlForeignList, getDdlUsesList } from './getDdlTableDesc'
 import { getDir } from './getDir'
 import { getSchemaList } from './getSchemaList'
 import { getStat } from './getStatList'
@@ -179,6 +179,7 @@ export async function GoMssql(logger: Logger, config: TConfigMssql, stamp?: bool
 			let columnList: { object_name: string; spec: string; description: string }[] = []
 			let paramList: { object_name: string; spec: string }[] = []
 			let foreignList: TStampForeignKey[] = []
+			let usesList: TStampUses[] = []
 			if (object.kind === 'TABLE' || object.kind === 'VIEW') {
 				const descDataRes = await getDdlTableDesc(server, schema.name, object)
 				if (!descDataRes.ok) {
@@ -235,6 +236,18 @@ export async function GoMssql(logger: Logger, config: TConfigMssql, stamp?: bool
 				}
 				foreignList = foreignListRes.result
 			}
+			if (stamp) {
+				const usesListRes = await getDdlUsesList(server, schema.name, object.name, config.connection.database)
+				if (!usesListRes.ok) {
+					logger.error(
+						`on exec query in MSSQL "${config.connection.host}:${config.connection.port}/${config.connection.database}"`,
+						usesListRes.error,
+					)
+					object.state = 'error'
+					continue
+				}
+				usesList = usesListRes.result
+			}
 			let triggerTableName = ''
 			let triggerTableSchemaName = ''
 			if (stamp && object.kind === 'TRIGGER') {
@@ -263,6 +276,7 @@ export async function GoMssql(logger: Logger, config: TConfigMssql, stamp?: bool
 					...(columnList.length > 0 ? { column_list: columnList } : {}),
 					...(paramList.length > 0 ? { param_list: paramList } : {}),
 					...(foreignList.length > 0 ? { foreign_list: foreignList } : {}),
+					...(usesList.length > 0 ? { uses_list: usesList } : {}),
 				}
 				actualText = `${makeStamp(stampData)}\n\nUSE [${config.connection.database}]\nGO\n\n${actualText}`
 			} else {

@@ -1,7 +1,7 @@
 import type { DbMssql } from '../../db/mssql'
 import type { TResult } from '../../tresult'
 import type { TObjectMssql } from './getSchemaList'
-import type { TStampParam, TStampForeignKey } from '../../util/makeStamp'
+import type { TStampParam, TStampForeignKey, TStampUses } from '../../util/makeStamp'
 
 export type TTableDescData = {
 	tableDesc: string
@@ -268,4 +268,53 @@ export async function getDdlForeignList(server: DbMssql, schema: string, objectN
 	}
 
 	return { result: [...map.values()], ok: true }
+}
+
+type TMssqlUsesRow = {
+	DATABASE_NAME: string
+	SCHEMA_NAME: string
+	OBJECT_NAME: string
+	KIND: string
+}
+
+export async function getDdlUsesList(server: DbMssql, schema: string, objectName: string, database: string): Promise<TResult<TStampUses[]>> {
+	const script = [
+		`SELECT`,
+		`    COALESCE(dep.referenced_database_name, '${database}') AS DATABASE_NAME,`,
+		`    COALESCE(dep.referenced_schema_name, '') AS SCHEMA_NAME,`,
+		`    dep.referenced_entity_name AS OBJECT_NAME,`,
+		`    CASE o.type`,
+		`        WHEN 'U'  THEN 'TABLE'`,
+		`        WHEN 'V'  THEN 'VIEW'`,
+		`        WHEN 'P'  THEN 'PROCEDURE'`,
+		`        WHEN 'FN' THEN 'FUNCTION'`,
+		`        WHEN 'IF' THEN 'FUNCTION'`,
+		`        WHEN 'TF' THEN 'FUNCTION'`,
+		`        WHEN 'TR' THEN 'TRIGGER'`,
+		`        WHEN 'SN' THEN 'SYNONYM'`,
+		`        WHEN 'SO' THEN 'SEQUENCE'`,
+		`        ELSE ''`,
+		`    END AS KIND`,
+		`FROM sys.sql_expression_dependencies dep`,
+		`JOIN sys.objects src ON dep.referencing_id = src.object_id`,
+		`JOIN sys.schemas s ON src.schema_id = s.schema_id`,
+		`LEFT JOIN sys.objects o ON dep.referenced_id = o.object_id`,
+		`WHERE s.name = '${schema}' AND src.name = '${objectName}'`,
+		`ORDER BY dep.referenced_entity_name`,
+	].join('\n')
+
+	const resExec = await server.exec<TMssqlUsesRow[]>(script)
+	if (!resExec.ok) {
+		return { error: resExec.error, ok: false }
+	}
+
+	return {
+		result: resExec.result.map(row => ({
+			schema_name: row.SCHEMA_NAME,
+			object_name: row.OBJECT_NAME,
+			database_name: row.DATABASE_NAME,
+			kind: row.KIND,
+		})),
+		ok: true,
+	}
 }
