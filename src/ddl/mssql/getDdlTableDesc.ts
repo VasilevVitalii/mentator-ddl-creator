@@ -303,7 +303,7 @@ export async function getDdlUsesList(server: DbMssql, schema: string, objectName
 	const script = [
 		`SELECT`,
 		`    COALESCE(dep.referenced_database_name, '${database}') AS DATABASE_NAME,`,
-		`    COALESCE(dep.referenced_schema_name, 'dbo') AS SCHEMA_NAME,`,
+		`    COALESCE(NULLIF(dep.referenced_schema_name, ''), 'dbo') AS SCHEMA_NAME,`,
 		`    dep.referenced_entity_name AS OBJECT_NAME,`,
 		`    CASE o.type`,
 		`        WHEN 'U'  THEN 'TABLE'`,
@@ -385,5 +385,5 @@ export async function getDdlUsesList(server: DbMssql, schema: string, objectName
 		}
 	}
 
-	return { result, ok: true }
+	return { result: result.filter(item => item.kind !== ''), ok: true }
 }
