@@ -275,13 +275,35 @@ type TMssqlUsesRow = {
 	SCHEMA_NAME: string
 	OBJECT_NAME: string
 	KIND: string
+	IS_UNRESOLVED: number
+}
+
+type TMssqlCrossDbRow = {
+	SCHEMA_NAME: string
+	OBJECT_NAME: string
+	KIND: string
+}
+
+function mssqlTypeToKind(type: string): string {
+	switch (type) {
+		case 'U':  return 'TABLE'
+		case 'V':  return 'VIEW'
+		case 'P':  return 'PROCEDURE'
+		case 'FN': return 'FUNCTION'
+		case 'IF': return 'FUNCTION'
+		case 'TF': return 'FUNCTION'
+		case 'TR': return 'TRIGGER'
+		case 'SN': return 'SYNONYM'
+		case 'SO': return 'SEQUENCE'
+		default:   return ''
+	}
 }
 
 export async function getDdlUsesList(server: DbMssql, schema: string, objectName: string, database: string): Promise<TResult<TStampUses[]>> {
 	const script = [
 		`SELECT`,
 		`    COALESCE(dep.referenced_database_name, '${database}') AS DATABASE_NAME,`,
-		`    COALESCE(dep.referenced_schema_name, '') AS SCHEMA_NAME,`,
+		`    COALESCE(dep.referenced_schema_name, 'dbo') AS SCHEMA_NAME,`,
 		`    dep.referenced_entity_name AS OBJECT_NAME,`,
 		`    CASE o.type`,
 		`        WHEN 'U'  THEN 'TABLE'`,
@@ -294,7 +316,8 @@ export async function getDdlUsesList(server: DbMssql, schema: string, objectName
 		`        WHEN 'SN' THEN 'SYNONYM'`,
 		`        WHEN 'SO' THEN 'SEQUENCE'`,
 		`        ELSE ''`,
-		`    END AS KIND`,
+		`    END AS KIND,`,
+		`    CASE WHEN dep.referenced_id IS NULL THEN 1 ELSE 0 END AS IS_UNRESOLVED`,
 		`FROM sys.sql_expression_dependencies dep`,
 		`JOIN sys.objects src ON dep.referencing_id = src.object_id`,
 		`JOIN sys.schemas s ON src.schema_id = s.schema_id`,
@@ -308,13 +331,59 @@ export async function getDdlUsesList(server: DbMssql, schema: string, objectName
 		return { error: resExec.error, ok: false }
 	}
 
-	return {
-		result: resExec.result.map(row => ({
-			schema_name: row.SCHEMA_NAME,
-			object_name: row.OBJECT_NAME,
-			database_name: row.DATABASE_NAME,
-			kind: row.KIND,
-		})),
-		ok: true,
+	const result: TStampUses[] = resExec.result.map(row => ({
+		schema_name: row.SCHEMA_NAME,
+		object_name: row.OBJECT_NAME,
+		database_name: row.DATABASE_NAME,
+		kind: row.KIND,
+	}))
+
+	// Для объектов из других баз referenced_id = NULL, поэтому kind пустой.
+	// Группируем их по database_name и делаем по одному запросу на каждую внешнюю базу.
+	const unresolvedByDb = new Map<string, TStampUses[]>()
+	resExec.result.forEach((raw, i) => {
+		if (raw.IS_UNRESOLVED) {
+			const item = result[i] as TStampUses
+			if (!unresolvedByDb.has(item.database_name)) unresolvedByDb.set(item.database_name, [])
+			unresolvedByDb.get(item.database_name)!.push(item)
+		}
+	})
+
+	for (const [dbName, items] of unresolvedByDb) {
+		const names = items.map(item => `'${item.object_name.replace(/'/g, "''")}'`).join(', ')
+		const crossScript = [
+			`SELECT s.name AS SCHEMA_NAME, o.name AS OBJECT_NAME,`,
+			`    CASE o.type`,
+			`        WHEN 'U'  THEN 'TABLE'`,
+			`        WHEN 'V'  THEN 'VIEW'`,
+			`        WHEN 'P'  THEN 'PROCEDURE'`,
+			`        WHEN 'FN' THEN 'FUNCTION'`,
+			`        WHEN 'IF' THEN 'FUNCTION'`,
+			`        WHEN 'TF' THEN 'FUNCTION'`,
+			`        WHEN 'TR' THEN 'TRIGGER'`,
+			`        WHEN 'SN' THEN 'SYNONYM'`,
+			`        WHEN 'SO' THEN 'SEQUENCE'`,
+			`        ELSE ''`,
+			`    END AS KIND`,
+			`FROM [${dbName}].sys.objects o`,
+			`JOIN [${dbName}].sys.schemas s ON o.schema_id = s.schema_id`,
+			`WHERE o.name IN (${names})`,
+		].join('\n')
+
+		const crossRes = await server.exec<TMssqlCrossDbRow[]>(crossScript)
+		if (!crossRes.ok) continue
+
+		// lookup: schema.object -> kind
+		const lookup = new Map<string, string>()
+		for (const row of crossRes.result) {
+			lookup.set(`${row.SCHEMA_NAME}.${row.OBJECT_NAME}`, row.KIND)
+		}
+
+		for (const item of items) {
+			const kind = lookup.get(`${item.schema_name}.${item.object_name}`)
+			if (kind) item.kind = kind
+		}
 	}
+
+	return { result, ok: true }
 }
