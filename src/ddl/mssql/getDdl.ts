@@ -259,7 +259,7 @@ async function getDdlView(server: DbMssql, schema: string, viewName: string): Pr
 		return { error: resExec.error, ok: false }
 	}
 	const text = resExec.result.map(m => m.TEXT).join('\n')
-	return { result: text, ok: true }
+	return { result: toCreateOrAlter(text), ok: true }
 }
 
 async function getDdlProcedure(server: DbMssql, schema: string, procedureName: string): Promise<TResult<string>> {
@@ -275,7 +275,7 @@ async function getDdlProcedure(server: DbMssql, schema: string, procedureName: s
 		return { error: resExec.error, ok: false }
 	}
 	const text = resExec.result.map(m => m.TEXT).join('\n')
-	return { result: text, ok: true }
+	return { result: toCreateOrAlter(text), ok: true }
 }
 
 async function getDdlFunction(server: DbMssql, schema: string, functionName: string): Promise<TResult<string>> {
@@ -291,7 +291,7 @@ async function getDdlFunction(server: DbMssql, schema: string, functionName: str
 		return { error: resExec.error, ok: false }
 	}
 	const text = resExec.result.map(m => m.TEXT).join('\n')
-	return { result: text, ok: true }
+	return { result: toCreateOrAlter(text), ok: true }
 }
 
 async function getDdlTrigger(server: DbMssql, schema: string, triggerName: string): Promise<TResult<string>> {
@@ -312,7 +312,7 @@ async function getDdlTrigger(server: DbMssql, schema: string, triggerName: strin
 	// sys.sql_modules strips the database name but keeps the leading dot, e.g. ".dbo.TriggerName".
 	// Replace the malformed name with the correct schema-qualified name.
 	text = text.replace(/(CREATE\s+(?:OR\s+ALTER\s+)?TRIGGER\s+)\.[^\s(]+/i, `$1[${schema}].[${triggerName}]`)
-	return { result: text, ok: true }
+	return { result: toCreateOrAlter(text), ok: true }
 }
 
 async function getDdlIndex(server: DbMssql, schema: string, indexName: string, config: TConfigMssql): Promise<TResult<string>> {
@@ -324,16 +324,28 @@ async function getDdlIndex(server: DbMssql, schema: string, indexName: string, c
 		`    t.name AS TABLE_NAME,`,
 		`    s.name AS SCHEMA_NAME,`,
 		`    i.object_id AS OBJECT_ID,`,
-		`    i.index_id AS INDEX_ID`,
+		`    i.index_id AS INDEX_ID,`,
+		`    i.has_filter AS HAS_FILTER,`,
+		`    i.filter_definition AS FILTER_DEFINITION`,
 		`FROM sys.indexes i`,
 		`JOIN sys.tables t ON i.object_id = t.object_id`,
 		`JOIN sys.schemas s ON t.schema_id = s.schema_id`,
 		`WHERE s.name = '${schema}' AND i.name = '${indexName}'`,
 	].join('\n')
 
-	const resExec = await server.exec<{ INDEX_NAME: string; INDEX_TYPE: string; IS_UNIQUE: boolean; TABLE_NAME: string; SCHEMA_NAME: string; OBJECT_ID: number; INDEX_ID: number }[]>(
-		script,
-	)
+	const resExec = await server.exec<
+		{
+			INDEX_NAME: string
+			INDEX_TYPE: string
+			IS_UNIQUE: boolean
+			TABLE_NAME: string
+			SCHEMA_NAME: string
+			OBJECT_ID: number
+			INDEX_ID: number
+			HAS_FILTER: boolean
+			FILTER_DEFINITION: string | null
+		}[]
+	>(script)
 	if (!resExec.ok) {
 		return { error: resExec.error, ok: false }
 	}
@@ -347,28 +359,43 @@ async function getDdlIndex(server: DbMssql, schema: string, indexName: string, c
 	const scriptColumns = [
 		`SELECT`,
 		`    c.name AS COLUMN_NAME,`,
-		`    ic.is_descending_key AS IS_DESC`,
+		`    ic.is_descending_key AS IS_DESC,`,
+		`    ic.is_included_column AS IS_INCLUDED`,
 		`FROM sys.index_columns ic`,
 		`JOIN sys.columns c ON ic.object_id = c.object_id AND ic.column_id = c.column_id`,
 		`WHERE ic.object_id = ${idx.OBJECT_ID} AND ic.index_id = ${idx.INDEX_ID}`,
-		`ORDER BY ic.key_ordinal`,
+		`ORDER BY ic.is_included_column, ic.key_ordinal, ic.index_column_id`,
 	].join('\n')
-	const resColumns = await server.exec<{ COLUMN_NAME: string; IS_DESC: boolean }[]>(scriptColumns)
+	const resColumns = await server.exec<{ COLUMN_NAME: string; IS_DESC: boolean; IS_INCLUDED: boolean }[]>(scriptColumns)
 	if (!resColumns.ok) {
 		return { error: resColumns.error, ok: false }
 	}
 
-	const columns = resColumns.result.map(c => `${c.COLUMN_NAME}${c.IS_DESC ? ' DESC' : ' ASC'}`).join(', ')
+	const columns = resColumns.result
+		.filter(c => !c.IS_INCLUDED)
+		.map(c => `[${c.COLUMN_NAME}]${c.IS_DESC ? ' DESC' : ' ASC'}`)
+		.join(', ')
+	const included = resColumns.result
+		.filter(c => c.IS_INCLUDED)
+		.map(c => `[${c.COLUMN_NAME}]`)
+		.join(', ')
 	const unique = idx.IS_UNIQUE ? 'UNIQUE ' : ''
 	const type = idx.INDEX_TYPE === 'CLUSTERED' ? 'CLUSTERED' : 'NONCLUSTERED'
 	let ddl = `CREATE ${unique}${type} INDEX [${idx.INDEX_NAME}] ON [${idx.SCHEMA_NAME}].[${idx.TABLE_NAME}] (${columns})`
+	if (included) {
+		ddl += ` INCLUDE (${included})`
+	}
+	if (idx.HAS_FILTER && idx.FILTER_DEFINITION) {
+		// filtered index requires QUOTED_IDENTIFIER ON (sqlcmd defaults to OFF)
+		ddl = `SET QUOTED_IDENTIFIER ON\nGO\n\n${ddl} WHERE ${idx.FILTER_DEFINITION}`
+	}
 
 	if (config.objects.storage.allowFilegroup) {
 		const scriptFilegroup = [
 			`SELECT fg.name AS FILEGROUP_NAME`,
 			`FROM sys.indexes i`,
 			`JOIN sys.filegroups fg ON i.data_space_id = fg.data_space_id`,
-			`WHERE i.name = '${indexName}'`,
+			`WHERE i.object_id = ${idx.OBJECT_ID} AND i.index_id = ${idx.INDEX_ID}`,
 		].join('\n')
 		const resFilegroup = await server.exec<{ FILEGROUP_NAME: string }[]>(scriptFilegroup)
 		if (resFilegroup.ok && resFilegroup.result.length > 0) {
@@ -446,4 +473,39 @@ async function getDdlSynonym(server: DbMssql, schema: string, synonymName: strin
 
 	const syn = resExec.result[0]!
 	return { result: `CREATE SYNONYM [${schema}].[${syn.SYNONYM_NAME}] FOR ${syn.BASE_OBJECT}`, ok: true }
+}
+
+/**
+ * Turns "CREATE VIEW|PROC|PROCEDURE|FUNCTION|TRIGGER" at the start of a module definition into "CREATE OR ALTER ..." (SQL Server 2016 SP1+).
+ * Leading whitespace and comments (T-SQL block comments can be nested) are skipped; text already using "CREATE OR ALTER" is left as is.
+ */
+export function toCreateOrAlter(text: string): string {
+	let pos = 0
+	while (pos < text.length) {
+		if (/\s/.test(text[pos]!)) {
+			pos++
+		} else if (text.startsWith('--', pos)) {
+			const eol = text.indexOf('\n', pos)
+			pos = eol < 0 ? text.length : eol + 1
+		} else if (text.startsWith('/*', pos)) {
+			let depth = 0
+			while (pos < text.length) {
+				if (text.startsWith('/*', pos)) {
+					depth++
+					pos += 2
+				} else if (text.startsWith('*/', pos)) {
+					depth--
+					pos += 2
+					if (depth === 0) break
+				} else {
+					pos++
+				}
+			}
+		} else {
+			break
+		}
+	}
+	const match = /^(CREATE)(\s+)(?=(?:VIEW|PROC|PROCEDURE|FUNCTION|TRIGGER)\b)/i.exec(text.slice(pos))
+	if (!match) return text
+	return `${text.slice(0, pos)}${match[1]} OR ALTER${match[2]}${text.slice(pos + match[0].length)}`
 }

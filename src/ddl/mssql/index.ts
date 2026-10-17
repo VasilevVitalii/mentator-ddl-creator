@@ -172,8 +172,12 @@ export async function GoMssql(logger: Logger, config: TConfigMssql, stamp?: bool
 			}
 			let actualText = trim(actualTextRes.result)
 			if (['TABLE', 'VIEW', 'INDEX', 'SEQUENCE'].includes(object.kind)) {
-				actualText = format(actualText, { language: 'tsql' })
-				actualText = trim(actualText)
+				// sql-formatter does not understand GO, so format each batch separately
+				actualText = actualText
+					.split(/^\s*GO\s*$/im)
+					.map(batch => trim(format(batch, { language: 'tsql' })))
+					.filter(batch => batch)
+					.join('\nGO\n\n')
 			}
 			let tableDescription = ''
 			let columnList: { object_name: string; spec: string; description: string }[] = []
